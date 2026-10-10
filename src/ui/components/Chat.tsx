@@ -9,10 +9,25 @@ import { OFFER_BY_ID } from '../../data/fixtures';
 import { Clover, Send } from './Icons';
 import { OfferChip, shortGroup } from './bits';
 import { PlanCard } from './PlanCard';
+import { ApprovedCard, CreatorsCard, PaymentsCard, PaymentsListCard, RefundsCard, ResultsCard, SettlementsCard, WasteCard } from './RayCards';
 
-export function ModeChip() {
-  const mode = useChat((s) => s.mode);
-  return <span className="mono-tag" title="Live mode is used only when the site has an API key; otherwise Ray runs in demo mode.">{mode === 'live' ? 'Live mode' : 'Demo mode'}</span>;
+/** Live/Demo switch. Live is disabled (with the reason) when the function has no key or isn't deployed. */
+export function ModeToggle() {
+  const mode = useStore((s) => s.rayMode);
+  const setMode = useStore((s) => s.setRayMode);
+  const health = useChat((s) => s.health);
+  const ready = health.state === 'ready';
+  const effective = mode === 'live' && ready ? 'live' : 'demo';
+  const reason = health.state === 'off' ? health.reason : health.state === 'checking' ? 'Checking live mode…' : `Live: ${health.model}`;
+  return (
+    <div className="mode-toggle" title={reason}>
+      <div className="seg sm" role="radiogroup" aria-label="Ray mode">
+        <button role="radio" aria-checked={effective === 'live'} className={effective === 'live' ? 'on' : ''} disabled={!ready} onClick={() => setMode('live')}><i className={`dot ${ready ? 'ok' : ''}`} />Live</button>
+        <button role="radio" aria-checked={effective === 'demo'} className={effective === 'demo' ? 'on' : ''} onClick={() => setMode('demo')}>Demo</button>
+      </div>
+      <span className="mode-note">{health.state === 'ready' ? (effective === 'live' ? `Claude (${health.model})` : 'Scripted answers') : reason}</span>
+    </div>
+  );
 }
 
 function SimCard({ title, sim }: Extract<RayCard, { kind: 'sim' }>) {
@@ -62,20 +77,32 @@ export function DraftCard({ draft }: { draft: Draft }) {
 }
 
 function CardView({ card, onAsk }: { card: RayCard; onAsk: (q: string) => void }) {
-  if (card.kind === 'plan_live') return <PlanCard onAsk={onAsk} />;
-  if (card.kind === 'sim') return <SimCard {...card} />;
-  if (card.kind === 'draft') return <DraftCard draft={card.draft} />;
-  return <div className="chips">{card.items.map((i) => <button key={i.label} className="chip" onClick={() => onAsk(i.message)}>{i.label}</button>)}</div>;
+  const approved = useStore((s) => s.approved);
+  switch (card.kind) {
+    case 'plan_live': return <><PlanCard onAsk={onAsk} />{approved && <ApprovedCard />}</>;
+    case 'sim': return <SimCard {...card} />;
+    case 'draft': return <DraftCard draft={card.draft} />;
+    case 'waste': return <WasteCard onFix={() => onAsk('Set up Smart Offers')} />;
+    case 'payments': return <PaymentsCard d={card.data} />;
+    case 'payments_list': return <PaymentsListCard title={card.title} d={card.data} />;
+    case 'settlements': return <SettlementsCard d={card.data} />;
+    case 'refunds': return <RefundsCard d={card.data} />;
+    case 'results': return <ResultsCard d={card.data} />;
+    case 'creators': return <CreatorsCard />;
+    case 'help': return <div className="chips">{card.items.map((i) => <button key={i.label} className="chip" onClick={() => onAsk(i.message)}>{i.label}</button>)}</div>;
+    default: return null;
+  }
 }
 
-function Msg({ m, onAsk }: { m: ChatMsg; onAsk: (q: string) => void }) {
+function Msg({ m, onAsk, last }: { m: ChatMsg; onAsk: (q: string) => void; last: boolean }) {
   if (m.role === 'user') return <div className="msg-user">{m.text}</div>;
   return (
     <div className="msg-ray">
-      <div className="ray-line"><span className="clover"><Clover /></span><b>Ray</b>{m.refused && <span className="mono-tag amber">Declined</span>}</div>
+      <div className="ray-line"><span className="clover"><Clover /></span><b>Ray</b>{m.refused && <span className="mono-tag amber">Declined</span>}{m.via === 'live' && <span className="mono-tag green">Live</span>}</div>
+      {m.note && <div className="ray-note" role="status">{m.note}</div>}
       <p>{m.text}</p>
-      {m.card && <CardView card={m.card} onAsk={onAsk} />}
-      {m.quick && <div className="chips quick">{m.quick.map((q) => <button key={q.label} className="chip hl" onClick={() => onAsk(q.message)}>{q.label}</button>)}</div>}
+      {m.cards?.map((c, i) => <CardView key={i} card={c} onAsk={onAsk} />)}
+      {last && m.quick && <div className="chips quick">{m.quick.map((q) => <button key={q.label} className="chip hl" onClick={() => onAsk(q.message)}>{q.label}</button>)}</div>}
     </div>
   );
 }
@@ -85,34 +112,33 @@ export function ChatThread() {
   const busy = useChat((s) => s.busy);
   const ask = useRay();
   const end = useRef<HTMLDivElement>(null);
-  useEffect(() => { end.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' }); }, [messages.length]);
+  useEffect(() => { end.current?.scrollIntoView?.({ behavior: 'smooth', block: 'end' }); }, [messages.length, busy]);
+  const lastRay = [...messages].reverse().find((m) => m.role === 'ray')?.id;
   return (
     <div className="chat" aria-live="polite">
-      {messages.map((m) => <Msg key={m.id} m={m} onAsk={ask} />)}
-      {busy && <div className="msg-ray"><div className="ray-line"><span className="clover"><Clover /></span><b>Ray</b><span className="muted small">thinking…</span></div></div>}
+      {messages.map((m) => <Msg key={m.id} m={m} onAsk={(q) => void ask(q)} last={m.id === lastRay} />)}
+      {busy && <div className="msg-ray"><div className="ray-line"><span className="clover pulse"><Clover /></span><b>Ray</b><span className="muted small">thinking…</span></div></div>}
       <div ref={end} />
     </div>
   );
 }
 
-export function Composer({ suggestions, placeholder = 'Ask Ray about offers, results or your plan…', onSubmit }: { suggestions?: string[]; placeholder?: string; onSubmit?: (q: string) => void }) {
+export function Composer({ placeholder = 'Ask Ray about payments, settlements, offers…', onSubmit, autoFocus }: { placeholder?: string; onSubmit?: (q: string) => void; autoFocus?: boolean }) {
   const ask = useRay();
+  const busy = useChat((s) => s.busy);
+  const setup = useChat((s) => s.setup);
   const [text, setText] = useState('');
-  const go = (q: string) => (onSubmit ? onSubmit(q) : void ask(q));
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!text.trim()) return;
-    go(text.trim());
+    const q = text.trim();
+    if (!q || busy) return;
+    if (onSubmit) onSubmit(q); else void ask(q);
     setText('');
   };
   return (
-    <div className="composer-wrap">
-      {suggestions && <div className="chips">{suggestions.map((s) => <button key={s} className="chip" onClick={() => go(s)}>{s}</button>)}</div>}
-      <form className="composer row-form" onSubmit={submit}>
-        <input aria-label="Message Ray" value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} />
-        <ModeChip />
-        <button className="send" aria-label="Send" type="submit"><Send /></button>
-      </form>
-    </div>
+    <form className="composer row-form" onSubmit={submit}>
+      <input aria-label="Message Ray" value={text} onChange={(e) => setText(e.target.value)} placeholder={setup ? 'Type your answer, or tap an option above (say "cancel" to stop)' : placeholder} autoFocus={autoFocus} />
+      <button className="send" aria-label="Send" type="submit" disabled={busy}><Send /></button>
+    </form>
   );
 }

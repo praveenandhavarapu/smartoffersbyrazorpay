@@ -1,5 +1,5 @@
 export type Actor = 'Merchant (Praveen)' | 'Ray (draft)' | 'System';
-export type AuditAction = 'approve' | 'override' | 'clear_override' | 'pause' | 'resume' | 'rule_change' | 'kill_switch' | 'creator_fix' | 'draft' | 'reset';
+export type AuditAction = 'approve' | 'override' | 'clear_override' | 'pause' | 'resume' | 'rule_change' | 'kill_switch' | 'creator_fix' | 'draft' | 'reset' | 'settle_instant';
 export type AuditEntry = { id: number; at: string; demoDate: string; actor: Actor; action: AuditAction; summary: string; before?: string; after?: string };
 
 export function makeEntry(prev: AuditEntry[], e: Omit<AuditEntry, 'id' | 'at'>): AuditEntry {

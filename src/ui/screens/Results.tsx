@@ -8,7 +8,8 @@ import { explainGroup } from '../../engine/explain';
 import { inr, inrSigned, num, pctOf, pp, xr } from '../../lib/format';
 import { DEMO_DATES, fmtDate } from '../../lib/dates';
 import { Alert, Clover, Power } from '../components/Icons';
-import { Composer, ChatThread } from '../components/Chat';
+import { useNavigate } from 'react-router-dom';
+import { useChat } from '../../ray/chatStore';
 import { Banner, Kpi, OfferChip, shortGroup } from '../components/bits';
 import { OverrideDrawer } from '../components/OverrideDrawer';
 
@@ -25,6 +26,8 @@ export function Results() {
   const overrides = useStore((s) => s.overrides);
   const openOverride = useDemo((s) => s.openOverride);
   const [why, setWhy] = useState<string | null>(null);
+  const nav = useNavigate();
+  const queue = useChat((s) => s.queue);
   const [showCodes, setShowCodes] = useState(false);
   const s = derived.snapshots[snapshot];
   const be = derived.breakEven;
@@ -131,9 +134,10 @@ export function Results() {
           )}
         </section>
 
-        <div className="dock-static">
-          <ChatThread />
-          <Composer suggestions={['How are the results so far?', 'Why does returning get no offer?', 'Give returning customers ₹100 off', 'Are creator codes leaking?']} />
+        <div className="ask-ray card pad">
+          <span className="clover"><Clover /></span>
+          <span>Questions about these results?</span>
+          {['How are the results so far?', 'Why does returning get no offer?', 'Give returning customers ₹100 off'].map((q) => <button key={q} className="chip" onClick={() => { queue(q); nav('/ray'); }}>{q}</button>)}
         </div>
       </div>
 

@@ -1,4 +1,5 @@
 import { route } from '../demoRouter';
+import { parseAnswer } from '../setupFlow';
 import { tools, type RayCtx } from '../tools';
 import { testCtx } from '../../test/ctx';
 import { generateNetwork } from '../../data/generator/network';
@@ -114,11 +115,41 @@ describe('Ray red-team (demo mode, SPEC 8.5)', () => {
 
   it('core intents quote engine numbers', () => {
     expect(route('Where did ALPHA10 go last month?', ctx).text).toContain('₹1,85,995');
-    expect(route('Fix my offers with Smart Offers', ctx).text).toContain('₹94,665');
+    expect(route('Fix my offers with Smart Offers', ctx).startSetup).toBe(true);
+    expect(route('Show me the plan', ctx).text).toContain('₹94,665');
     expect(route('What if my margin is 30%?', ctx).text).toMatch(/no offer pays back/);
     expect(route('What if my margin is 30%?', ctx).text).toContain('−₹7,806');
     expect(route('What if my budget is ₹50,000?', ctx).text).toContain('₹43,186');
     expect(route('What about 3x?', ctx).text).toContain('+₹16,790');
-    expect(route('How are the results so far?', ctx).text).toMatch(/40–230/);
+    expect(route('How are the results so far?', { ...ctx, approved: true }).text).toMatch(/40–230/);
+  });
+
+  it('answers payments, settlements and refunds from the ledger, for the period asked', () => {
+    const p = route('Tell me about the last 5 days settlements', ctx);
+    expect(p.intent).toBe('settlements');
+    expect(p.card?.kind).toBe('settlements');
+    if (p.card?.kind === 'settlements') expect(p.card.data.days).toBe(5);
+    const pay = route('What did I collect in the last 5 days?', ctx);
+    expect(pay.intent).toBe('payments');
+    expect(pay.text).toMatch(/₹/);
+    expect(route('Show my failed payments', ctx).intent).toBe('failed_payments');
+    expect(route('Any disputes?', ctx).intent).toBe('refunds');
+    expect(route('How are my offers and coupons doing?', ctx).card?.kind).toBe('waste');
+    expect(route('Payments', ctx).quick?.length).toBeGreaterThan(0);
+  });
+});
+
+describe('guided setup', () => {
+  it('parses answers and rejects nonsense', () => {
+    expect(parseAnswer('budget', '₹1,00,000')).toEqual({ ok: true, patch: { budget: 100000 } });
+    expect(parseAnswer('budget', '1 lakh')).toEqual({ ok: true, patch: { budget: 100000 } });
+    expect(parseAnswer('budget', '50 crore').ok).toBe(false);
+    expect(parseAnswer('margin', '₹400')).toEqual({ ok: true, patch: { keepPer1000: 400 } });
+    expect(parseAnswer('margin', '40%')).toEqual({ ok: true, patch: { keepPer1000: 400 } });
+    const hi = parseAnswer('margin', '70%');
+    expect(hi.ok && hi.note).toMatch(/₹350–550/);
+    expect(parseAnswer('goal', 'Most new customers')).toEqual({ ok: true, patch: { goal: 'new_customers' } });
+    expect(parseAnswer('rules', 'Yes')).toEqual({ ok: true, patch: { festiveWindow: true } });
+    expect(parseAnswer('rules', 'maybe').ok).toBe(false);
   });
 });

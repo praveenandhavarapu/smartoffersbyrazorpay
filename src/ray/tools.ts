@@ -16,8 +16,17 @@ import type { Derived } from '../state/derived';
 import { marginOf, type Settings } from '../state/store';
 import { toPlanSettings } from '../state/derived';
 import type { ToolName } from './toolSchemas';
+import { lastDays, paymentSummary, settlementSummary, unsettledBalance, inRange, type InstantSettlement, type LedgerView } from '../data/ledgerQueries';
+import { fmtDate } from '../lib/dates';
 
-export type RayCtx = { model: Model; derived: Derived; settings: Settings; approved: boolean; killed: boolean };
+const rupees = (p: number) => roundHalfEven(p / 100);
+const dateOf = (t: number) => fmtDate(new Date((t + 19800) * 1000).toISOString().slice(0, 10));
+const clampDays = (d: unknown) => (typeof d === 'number' && Number.isFinite(d) ? Math.min(183, Math.max(1, Math.round(d))) : 7);
+
+export type RayCtx = {
+  model: Model; derived: Derived; settings: Settings; approved: boolean; killed: boolean;
+  ledger: LedgerView; settlementMode: 't1' | 'instant'; instant: InstantSettlement[];
+};
 
 const M = (x: number) => roundHalfEven(x);
 const R = (x: number) => roundHalfEven(x, 2);
@@ -45,6 +54,47 @@ export type Draft =
   | { type: 'settings'; patch: Partial<Settings>; summary: string };
 
 export const tools = {
+  get_payments_summary(ctx: RayCtx, a: { days?: number } = {}) {
+    const days = clampDays(a.days);
+    const r = lastDays(ctx.ledger, days);
+    const s = paymentSummary(ctx.ledger, r);
+    return {
+      window: `${dateOf(r.from)} – ${dateOf(r.to - 1)}`, days, today: dateOf(ctx.ledger.now),
+      captured_payments: s.capturedCount, collected: rupees(s.collected), success_rate_pct: O(s.successRate * 100), failed_payments: s.failedCount,
+      refunds: s.refundsCount, refunded: rupees(s.refunded), fees: rupees(s.fees), gst_on_fees: rupees(s.tax),
+      method_mix: Object.fromEntries(Object.entries(s.byMethod).map(([k, v]) => [k, { count: v.count, amount: rupees(v.amount), share_pct: s.capturedCount ? O((v.count / s.capturedCount) * 100) : 0 }])),
+      payments_with_smart_offer: s.smartOfferPayments,
+      note: 'Online payments only; cash-on-delivery orders are not payments.',
+    };
+  },
+  list_payments(ctx: RayCtx, a: { status?: string; method?: string; limit?: number } = {}) {
+    const n = Math.min(10, Math.max(1, Math.round(a.limit ?? 5)));
+    const ps = ctx.ledger.payments.filter((p) => (!a.status || p.status === a.status) && (!a.method || p.method === a.method)).slice(-n).reverse();
+    return { payments: ps.map((p) => ({ id: p.id, date: dateOf(p.created_at), amount: rupees(p.amount), status: p.status, method: p.method, contact: p.contact, error: p.error_description ?? null, smart_offer: p.offer_id ?? null })) };
+  },
+  get_settlements(ctx: RayCtx, a: { days?: number } = {}) {
+    const days = clampDays(a.days);
+    const r = lastDays(ctx.ledger, days);
+    const s = settlementSummary(ctx.ledger, r);
+    return {
+      window: `${dateOf(r.from)} – ${dateOf(r.to - 1)}`, days, schedule: ctx.settlementMode === 'instant' ? 'instant on demand (plus T+1 for the rest)' : 'T+1 (next day, 10:00)',
+      settled_count: s.count, settled_amount: rupees(s.amount), fees_and_gst: rupees(s.fees),
+      settlements: s.settlements.slice(0, 8).map((x) => ({ id: x.id, date: dateOf(x.created_at), amount: rupees(x.amount), status: x.status, type: x.type, utr: x.utr })),
+      next_scheduled: s.next ? { date: dateOf(s.next.created_at), amount: rupees(s.next.amount) } : null,
+      available_for_instant: ctx.settlementMode === 'instant' ? rupees(unsettledBalance(ctx.ledger, ctx.instant)) : null,
+    };
+  },
+  get_refunds_and_disputes(ctx: RayCtx, a: { days?: number } = {}) {
+    const days = clampDays(a.days);
+    const r = lastDays(ctx.ledger, days);
+    const rf = ctx.ledger.refunds.filter((f) => inRange(f.created_at, r));
+    const ds = ctx.ledger.disputes;
+    return {
+      window: `${dateOf(r.from)} – ${dateOf(r.to - 1)}`, days, refunds: rf.length, refunded: rupees(rf.reduce((x, f) => x + f.amount, 0)),
+      disputes_all_time: ds.map((d) => ({ id: d.id, status: d.status, amount: rupees(d.amount), reason: d.reason_code, opened: dateOf(d.created_at) })),
+      open_disputes: ds.filter((d) => d.status === 'open' || d.status === 'under_review').length,
+    };
+  },
   get_store_summary(ctx: RayCtx) {
     const s = ctx.derived.store;
     return { period: '22 Aug – 20 Sep 2026', checkouts: s.checkouts, orders: M(s.orders), sales: M(s.gmv), aov: M(s.aov), checkout_conversion_pct: O(s.conversion * 100), discounts: M(s.discounts), discount_share_pct: O(s.discountShare * 100) };
@@ -122,6 +172,14 @@ export type ToolCall = { name: ToolName; args: Record<string, unknown>; result: 
 export function runTool(ctx: RayCtx, name: string, args: Record<string, unknown>): unknown {
   const a = args ?? {};
   switch (name) {
+    case 'get_payments_summary': return tools.get_payments_summary(ctx, { days: a.days as number });
+    case 'list_payments': return tools.list_payments(ctx, {
+      status: ['captured', 'failed', 'refunded'].includes(a.status as string) ? (a.status as string) : undefined,
+      method: ['upi', 'card', 'netbanking', 'wallet'].includes(a.method as string) ? (a.method as string) : undefined,
+      limit: typeof a.limit === 'number' ? a.limit : undefined,
+    });
+    case 'get_settlements': return tools.get_settlements(ctx, { days: a.days as number });
+    case 'get_refunds_and_disputes': return tools.get_refunds_and_disputes(ctx, { days: a.days as number });
     case 'get_store_summary': return tools.get_store_summary(ctx);
     case 'get_offer_waste': return tools.get_offer_waste(ctx, { code: typeof a.code === 'string' ? a.code : undefined });
     case 'simulate_plan': {

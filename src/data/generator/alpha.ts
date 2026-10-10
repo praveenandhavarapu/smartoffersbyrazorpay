@@ -10,6 +10,9 @@ import { roundHalfUp } from '../../lib/format';
 import { BASELINE, PILOT_DAY20, toUnix } from '../../lib/dates';
 import type { Arm, CheckoutSession, GroupId, GroupStats, LineItem, OfferId, RzpOrder, RzpPayment } from '../types';
 
+/** Payment method mix: UPI 50%, card 40%, netbanking 6%, wallet 4%. */
+export const methodFor = (x: number): RzpPayment['method'] => (x < 0.5 ? 'upi' : x < 0.9 ? 'card' : x < 0.96 ? 'netbanking' : 'wallet');
+
 /** Cart value bounds per group (rupees). Keeps generated carts consistent with the group rules. */
 const CART_BOUNDS: Record<GroupId, [number, number]> = {
   new_ads_small: [999, 1499],
@@ -166,7 +169,7 @@ function buildSessions(
         if (!cod) {
           out.payments.push({
             id: `pay_${rid(r)}`, entity: 'payment', amount, currency: 'INR', status: 'captured', order_id: orderId,
-            method: pick(r, ['upi', 'upi', 'upi', 'card', 'netbanking', 'wallet'] as const), created_at: created + 30,
+            method: methodFor(r()), created_at: created + 30,
           });
         }
         session.order_id = orderId;
