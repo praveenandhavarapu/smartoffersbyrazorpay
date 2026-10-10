@@ -1,75 +1,93 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useModel } from '../../state/ModelContext';
+import { useStore } from '../../state/store';
+import { useLedger } from '../../state/useLedger';
 import { useChat } from '../../ray/chatStore';
-import { inr, num, pctOf, xr } from '../../lib/format';
-import { fmtDate, BASELINE } from '../../lib/dates';
+import { lastDays, monthly, paymentSummary, settlementSummary } from '../../data/ledgerQueries';
+import { dateTimeIST, inr, inrP, inrP2, inrSigned, num, pctOf, xr } from '../../lib/format';
 import { Clover } from '../components/Icons';
-import { Composer } from '../components/Chat';
-import { Kpi, shortGroup } from '../components/bits';
-
-const COLORS: Record<string, string> = { new_ads_small: '#305EFF', new_ads_big: '#6F8CFF', new_organic: '#9DB2FF', lapsed: '#0E9F6E', returning: '#C9302C', new_creator: '#B54708' };
+import { MethodMix, MonthlyBars } from '../components/charts';
+import { Stat, Status } from '../components/kit';
 
 export function Home() {
   const { model, derived } = useModel();
   const nav = useNavigate();
+  const v = useLedger();
+  const approved = useStore((s) => s.approved);
+  const killed = useStore((s) => s.killed);
   const queue = useChat((s) => s.queue);
-  const [how, setHow] = useState(false);
-  const a = derived.a10;
-  const s = derived.store;
+  const r30 = lastDays(v, 30);
+  const s30 = paymentSummary(v, r30);
+  const st = settlementSummary(v, lastDays(v, 30));
+  const months = monthly(v);
+  const recent = v.payments.slice(-6).reverse();
   const ask = (q: string) => { queue(q); nav('/ray'); };
-  const returning = a.rows.find((r) => r.group === 'returning');
+  const lastMonthKey = months[months.length - 1]?.month;
 
   return (
-    <div className="home">
-      <div className="hello">
-        <span className="clover"><Clover /></span>
-        <div><h1>Hello, {model.profile.founderName}</h1><p>What would you like to do for {model.profile.displayName} today?</p></div>
-      </div>
-      <Composer placeholder="Ask Ray anything about your business…" onSubmit={ask} />
-      <div className="chips home-chips">
-        {['Payments', 'Settlements'].map((c) => <span key={c} className="chip">{c}</span>)}
-        <button className="chip hl" onClick={() => ask('Where did ALPHA10 go last month?')}>Offers &amp; coupons <b>New</b></button>
-        {['Manage account', 'Support'].map((c) => <span key={c} className="chip">{c}</span>)}
+    <div className="page">
+      <div className="hello-row">
+        <div><h1>Hello, {model.profile.founderName}</h1><p className="muted">{model.profile.legalName} · payments overview</p></div>
+        <button className="btn secondary" onClick={() => nav('/ray')}><Clover width={14} style={{ color: 'var(--clover)' }} /> Ask Ray</button>
       </div>
 
-      <div className="label kpi-cap">Last month · {fmtDate(BASELINE.from, false)} – {fmtDate(BASELINE.to)}</div>
-      <div className="kpis">
-        <Kpi label="Sales collected" value={inr(s.gmv)} sub={`${num(s.orders)} orders · AOV ${inr(s.aov)}`} />
-        <Kpi label="Checkout conversion" value={pctOf(s.conversion)} sub={`${num(s.orders)} orders from ${num(s.checkouts)} checkouts`} />
-        <Kpi label="Discounts given" value={inr(s.discounts)} sub={`${pctOf(s.discountShare)} of sales`} tone="warn" />
+      <section className="ray-banner" aria-label="Ray insight">
+        <div className="rb-ic"><Clover /></div>
+        <div className="rb-body">
+          {approved ? (
+            <>
+              <b>Smart Offers is {killed ? 'paused' : 'live'}.</b>
+              <span> Day 20: {inrSigned(derived.snapshots.day20.profit)} extra profit vs the holdout, return {xr(derived.snapshots.day20.ret)}. ALPHA10 would have lost {inr(Math.abs(derived.snapshots.day20.alpha10SamePeriod))} in the same period.</span>
+            </>
+          ) : (
+            <>
+              <b>ALPHA10 lost you {inr(Math.abs(derived.a10.profit))} last month.</b>
+              <span> It cost {inr(derived.a10.spend)} for {xr(derived.a10.ret)} back, below your {xr(derived.breakEven)} break-even. {pctOf((derived.a10.rows.find((r) => r.group === 'returning')?.spend ?? 0) / derived.a10.spend, 0)} went to returning buyers who'd buy anyway.</span>
+            </>
+          )}
+        </div>
+        <div className="rb-actions">
+          {approved ? <button className="btn primary sm" onClick={() => nav('/offers/smart')}>View results</button> : <button className="btn primary sm" onClick={() => ask('How are my offers and coupons doing?')}>Ask Ray why</button>}
+          <button className="btn secondary sm" onClick={() => nav(approved ? '/studio/smart-offers' : '/offers/smart')}>{approved ? 'Agent runs' : 'Fix with Smart Offers'}</button>
+        </div>
+      </section>
+
+      <div className="stats4">
+        <Stat label="Collected · last 30 days" value={inrP(s30.collected)} sub={`from ${num(s30.capturedCount)} captured payments`} onClick={() => nav('/transactions?d=30')} />
+        <Stat label="Success rate" value={pctOf(s30.successRate)} sub={`${num(s30.failedCount)} failed payments`} onClick={() => nav('/transactions?d=30&status=failed')} />
+        <Stat label="Refunds · last 30 days" value={inrP(s30.refunded)} sub={`${num(s30.refundsCount)} processed`} onClick={() => nav('/transactions?tab=refunds')} />
+        <Stat label="Next settlement" value={st.next ? inrP(st.next.amount) : '—'} sub={st.next ? `${dateTimeIST(st.next.created_at)} · T+1` : 'nothing scheduled'} onClick={() => nav('/settlements')} />
       </div>
 
-      <section className="insight" aria-labelledby="insight-h">
-        <div className="insight-head"><span className="mono-tag amber">Ray insight</span><span className="muted small">{fmtDate(BASELINE.from, false)} – {fmtDate(BASELINE.to, false)}</span></div>
-        <h2 id="insight-h">ALPHA10 lost you {inr(Math.abs(a.profit))} last month.</h2>
-        <p>It cost {inr(a.spend)} and brought {inr(a.extraSales)} of extra sales: {xr(a.ret)} against a {xr(derived.breakEven)} break-even at your {num(derived.margin * 100)}% margin. {returning && `${pctOf(returning.spend / a.spend)} of it went to returning buyers who would have bought anyway.`}</p>
-        <div className="stack" role="img" aria-label="Where ALPHA10 spend went, by shopper group">
-          {a.rows.map((r) => <i key={r.group} style={{ width: `${(r.spend / a.spend) * 100}%`, background: COLORS[r.group] }} />)}
-        </div>
-        <div className="legend">
-          {a.rows.map((r) => {
-            const g = model.groups.find((x) => x.id === r.group)!;
-            const bad = r.ret < derived.breakEven;
-            return (
-              <div key={r.group} style={{ borderColor: COLORS[r.group] }}>
-                {shortGroup(g.label)}
-                <b>{inr(r.spend)}</b>
-                <span className={r.ret < 1 ? 'bad' : ''}>{xr(r.ret)} return{bad ? ' · below break-even' : ''}</span>
-              </div>
-            );
-          })}
-        </div>
-        {how && (
-          <div className="how-box">
-            <p><b>How do you know?</b> ALPHA10 had no holdout, so these lifts are estimates: the typical result of offer tests at {num(model.pool.size)} similar fashion stores on a synthetic network of {num(model.pool.network)} (same price band, Instagram- and creator-led, Magic Checkout). Shoppers are grouped only by first order, days since last order, traffic source, creator code and cart value.</p>
-            <p>Once live, a 10% holdout (sticky per customer, so nobody games it by waiting) measures your own store's numbers, and decisions shift from borrowed to your own results as data builds up. Real pilots also keep a 5% "old way" group; it's set to 0 here so the numbers match.</p>
+      <div className="grid2">
+        <section className="card pad">
+          <div className="sec-h"><h3>Collected per month</h3><span className="muted small">online payments, last 6 months · * part month</span></div>
+          <MonthlyBars data={months} partial={[months[0]?.month ?? '', lastMonthKey ?? '']} />
+        </section>
+        <section className="card pad">
+          <div className="sec-h"><h3>Payment methods · last 30 days</h3></div>
+          <MethodMix mix={s30.byMethod} />
+          <div className="mini-kv">
+            <div><span>Fees (2%)</span><b>{inrP(s30.fees)}</b></div>
+            <div><span>GST on fees</span><b>{inrP(s30.tax)}</b></div>
+            <div><span>Settled · 30 days</span><b>{inrP(st.amount)}</b></div>
           </div>
-        )}
-        <div className="insight-foot">
-          <button className="btn secondary" onClick={() => setHow(!how)} aria-expanded={how}>{how ? 'Hide' : 'How do you know?'}</button>
-          <span className="muted small">Estimates from similar stores until your holdout measures your own.</span>
-          <button className="btn primary" onClick={() => nav('/ray')}>Fix with Smart Offers →</button>
+        </section>
+      </div>
+
+      <section className="card">
+        <div className="sec-h pad-x"><h3>Recent payments</h3><button className="btn ghost sm" onClick={() => nav('/transactions')}>View all →</button></div>
+        <div className="tbl-wrap">
+          <table className="dtable">
+            <thead><tr><th>Payment ID</th><th>Amount</th><th>Method</th><th>Created</th><th>Status</th></tr></thead>
+            <tbody>
+              {recent.map((p) => (
+                <tr key={p.id} className="row-link" onClick={() => nav(`/transactions?q=${p.id}`)}>
+                  <td className="mono">{p.id}{p.offer_id && <span className="tag-so">Smart Offer</span>}</td><td>{inrP2(p.amount)}</td><td>{p.method}</td><td>{dateTimeIST(p.created_at)}</td><td><Status s={p.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
     </div>

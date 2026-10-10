@@ -75,3 +75,19 @@ export function maskPhone(raw: string): string {
   if (d.length < 10) return '+91 ••••• •••••';
   return `+91 ${d.slice(0, 2)}••• ••${d.slice(7)}`;
 }
+
+/** Paise -> ₹ with Indian grouping (₹1,85,995). */
+export const inrP = (paise: number): string => inr(paise / 100);
+/** Paise -> ₹ with two decimals, as on payment rows (₹1,149.00). */
+export function inrP2(paise: number): string {
+  const neg = paise < 0;
+  const a = Math.abs(Math.round(paise));
+  return (neg ? '−' : '') + '₹' + groupIndian(Math.floor(a / 100)) + '.' + String(a % 100).padStart(2, '0');
+}
+/** Unix seconds -> "10 Oct 2026, 14:05" in IST. */
+export function dateTimeIST(t: number, withTime = true): string {
+  const d = new Date((t + 19800) * 1000);
+  const M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getUTCMonth()];
+  const base = `${d.getUTCDate()} ${M} ${d.getUTCFullYear()}`;
+  return withTime ? `${base}, ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}` : base;
+}

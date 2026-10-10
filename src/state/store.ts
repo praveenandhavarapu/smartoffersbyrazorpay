@@ -6,6 +6,7 @@ import { create } from 'zustand';
 import type { Goal, GroupId, OfferId } from '../data/types';
 import { DEMO_DATES, type Moment } from '../lib/dates';
 import { makeEntry, type Actor, type AuditEntry } from './audit';
+import type { InstantSettlement } from '../data/ledgerQueries';
 
 export const STORAGE_KEY = 'smart-offers:v1';
 
@@ -32,6 +33,9 @@ type Persisted = {
   killed: boolean;
   moment: Moment;
   creatorFix: 'pending' | 'limited' | 'kept';
+  rayMode: 'live' | 'demo';
+  settlementMode: 't1' | 'instant';
+  instantSettlements: InstantSettlement[];
   audit: AuditEntry[];
 };
 
@@ -49,6 +53,9 @@ type Actions = {
   setOutage: (v: boolean) => void;
   setCreatorFix: (v: 'limited' | 'kept') => void;
   logDraft: (summary: string) => void;
+  setRayMode: (m: 'live' | 'demo') => void;
+  setSettlementMode: (m: 't1' | 'instant') => void;
+  settleInstant: (s: InstantSettlement) => void;
   reset: () => void;
 };
 
@@ -56,7 +63,7 @@ export type AppState = Persisted & Ephemeral & Actions;
 
 const initial: Persisted = {
   settings: DEFAULT_USER_SETTINGS, approved: false, approvedSettings: null, overrides: {}, killed: false,
-  moment: 'before', creatorFix: 'pending', audit: [],
+  moment: 'before', creatorFix: 'pending', rayMode: 'live', settlementMode: 't1', instantSettlements: [], audit: [],
 };
 
 function load(): Persisted {
@@ -80,7 +87,8 @@ function save(s: Persisted): void {
 
 const pick = (s: AppState): Persisted => ({
   settings: s.settings, approved: s.approved, approvedSettings: s.approvedSettings, overrides: s.overrides,
-  killed: s.killed, moment: s.moment, creatorFix: s.creatorFix, audit: s.audit,
+  killed: s.killed, moment: s.moment, creatorFix: s.creatorFix, rayMode: s.rayMode, settlementMode: s.settlementMode,
+  instantSettlements: s.instantSettlements, audit: s.audit,
 });
 
 const describe = (s: Settings) =>
@@ -133,6 +141,16 @@ export const useStore = create<AppState>((set, get) => {
       log('Merchant (Praveen)', 'creator_fix', v === 'limited' ? 'MEERA15 limited to first orders' : 'MEERA15 kept as is', 'any order', v === 'limited' ? 'first orders only' : 'any order');
     },
     logDraft: (summary) => log('Ray (draft)', 'draft', summary),
+    setRayMode: (rayMode) => set({ rayMode }),
+    setSettlementMode: (m) => {
+      const before = get().settlementMode;
+      set({ settlementMode: m });
+      log('Merchant (Praveen)', 'rule_change', 'Changed settlement schedule', before === 't1' ? 'T+1' : 'Instant', m === 't1' ? 'T+1' : 'Instant');
+    },
+    settleInstant: (x) => {
+      set((st) => ({ instantSettlements: [...st.instantSettlements, x] }));
+      log('Merchant (Praveen)', 'settle_instant', `Instant settlement of ₹${(x.amount / 100).toLocaleString('en-IN')} (fee ₹${(x.fee / 100).toLocaleString('en-IN')})`);
+    },
     reset: () => {
       try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
       set({ ...initial, snapshot: 'day20', outage: false });

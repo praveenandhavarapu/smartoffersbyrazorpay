@@ -18,16 +18,27 @@ Deploy: Netlify reads `netlify.toml` (build `npm run build`, publish `dist`, fun
 
 ## Screens
 
-| Route | Screen |
-| --- | --- |
-| `/` | Ray home: last month's KPIs and the "ALPHA10 lost you money" insight |
-| `/ray` | Setup and plan: setup card, live plan card, Approve, "Jump 20 days", chat with Ray |
-| `/checkout` | Checkout simulator: sample shoppers, a Magic Checkout-style sheet, the "Why" panel, outage toggle |
-| `/results` | Results at day 20 / day 60: holdout proof, ranges, overrides, alerts, billing, creator codes |
-| `/studio` | Agent Studio page: how it works, permissions, pricing, install and kill switch |
-| `/settings` | Guardrails and data: data sources, guardrail values, outage simulator, audit log, reset |
+A dashboard in the style of a payments console (no brand assets; concept label always visible):
 
-**Play demo** (top bar) runs a scripted walkthrough of about 80 seconds, with Back, Pause and Next.
+| Area | Route | What it does |
+| --- | --- | --- |
+| Payments → Home | `/` | 30-day KPIs, 6-month collections chart, method mix, recent payments, Ray insight |
+| Transactions | `/transactions` | Payments, Orders, Refunds, Disputes with filters, search and a detail drawer |
+| Settlements | `/settlements` | T+1 settlements; instant on-demand "Settle now" when enabled |
+| Reports | `/reports` | Download CSV reports (settlements, recon, payments, offers, refunds, orders) |
+| Offers & Coupons | `/offers`, `/offers/smart` | Coupons, and Smart Offers: results, setup & plan, checkout preview, creator codes |
+| Ray AI | `/ray` | Chat with Ray. Live (Claude) or Demo toggle; guided setup; cards and follow-up suggestions |
+| Agent Studio | `/studio`, `/studio/smart-offers` | Smart Offers Agent: daily 06:00 runs, transactions it decided, guardrails, activity log, kill switch |
+| Account & Settings | `/settings` | Ray mode and health, settlement schedule, data sources, outage simulator, audit log, reset |
+| Banking+, Payroll, other products | `/banking`, `/payroll`, `/products/*` | Overview pages (outside this concept's scope) |
+
+**Play demo** (bottom bar) runs a scripted walkthrough of about 90 seconds, with Back, Pause and Next. Ray uses scripted answers while it plays, so the video is repeatable.
+
+### Synthetic data (display only)
+- Six months (11 Apr – 10 Oct 2026) of orders, payments, refunds, disputes and settlements in `src/data/generator/ledger.ts`.
+- Method mix is UPI 50%, cards 40%, netbanking and wallets 10%.
+- Fee is 2% plus 18% GST on the fee. Settlements are T+1, with instant on-demand settlement as an option (0.25% demo fee).
+- 22 Aug – 10 Oct reuses the exact-count orders the Smart Offers engine measures, so the dashboard and the engine agree.
 
 ## How it is built
 
@@ -59,6 +70,10 @@ Field names marked `// VERIFY` must be checked against Razorpay's API docs first
 ### Live Ray (optional)
 
 Set `ANTHROPIC_API_KEY` (and optionally `ANTHROPIC_MODEL`, default `claude-sonnet-5-5`) in Netlify's environment variables, then redeploy.
+
+- Checking the key: `GET /.netlify/functions/ray` returns `{"configured": true, "model": "…"}` when the key is set. The value of the key is never returned.
+- The Ray page and Account & Settings show the result. If live mode fails, the chat shows the real reason (missing key, timeout, auth, model) and answers that message in demo mode.
+- Each round trip uses low effort and, on Sonnet 5.5, thinking only between tool calls. This keeps each round inside Netlify's roughly 10-second function limit.
 
 - `netlify/functions/ray.ts` adds the system prompt and tool schemas and calls the Claude Messages API.
 - The browser runs the tools locally and sends the results back. Each question is limited to 4 tool rounds and 1,024 output tokens.

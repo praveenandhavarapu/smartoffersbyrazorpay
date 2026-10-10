@@ -9,11 +9,22 @@ type Results = ReturnType<typeof tools.get_results>;
 type Bench = ReturnType<typeof tools.get_peer_benchmark>;
 type Creators = ReturnType<typeof tools.get_creator_code_report>;
 type Current = ReturnType<typeof tools.get_current_plan>;
+type Pay = ReturnType<typeof tools.get_payments_summary>;
+type Setl = ReturnType<typeof tools.get_settlements>;
+type Ref = ReturnType<typeof tools.get_refunds_and_disputes>;
 
 const offersOn = (s: Sim) => s.rows.filter((r) => r.offer !== 'none');
 
 export const T = {
-  help: () => "Here's what I can help with: fix last month's coupon waste, build or change your Smart Offers plan, test a budget, margin or return target, explain why a shopper group gets an offer, show pilot results against the holdout, and check creator codes.",
+  help: () => "Here's what I can help with: payments, settlements, refunds and disputes for any period; how your coupons are doing; setting up Smart Offers and testing a budget, margin or return target; explaining why a shopper group gets an offer; and pilot results against the holdout.",
+  payments: (s: Pay) => `${s.window}: ${inr(s.collected)} collected from ${num(s.captured_payments)} payments (${num(s.success_rate_pct, 1)}% success rate, ${num(s.failed_payments)} failed). UPI ${num(s.method_mix.upi.share_pct, 0)}%, cards ${num(s.method_mix.card.share_pct, 0)}%. ${s.refunds ? `${num(s.refunds)} refunds (${inr(s.refunded)}).` : 'No refunds.'} Fees ${inr(s.fees)} + GST ${inr(s.gst_on_fees)}.`,
+  failed: (s: Pay) => `${num(s.failed_payments)} payments failed in ${s.window} (success rate ${num(s.success_rate_pct, 1)}%). Most failures are cancelled or expired UPI requests and failed card OTPs; customers usually retry. Here are the latest ones.`,
+  settlements: (s: Setl, next: boolean) => {
+    const nx = s.next_scheduled ? `Next settlement: ${inr(s.next_scheduled.amount)} on ${s.next_scheduled.date}.` : 'No settlement is scheduled right now.';
+    if (next) return `${nx} Your schedule is ${s.schedule}.`;
+    return `${s.window}: ${num(s.settled_count)} settlements, ${inr(s.settled_amount)} paid to your bank after ${inr(s.fees_and_gst)} fees and GST. ${nx}${s.available_for_instant !== null ? ` ${inr(s.available_for_instant)} is available to settle instantly.` : ''}`;
+  },
+  refunds: (r: Ref) => `${r.window}: ${num(r.refunds)} refunds, ${inr(r.refunded)}. Disputes: ${num(r.open_disputes)} open or under review out of ${num(r.disputes_all_time.length)} in six months.`,
 
   waste: (w: Waste) => `${w.code} cost ${inr(w.spend)} last month and brought ${inr(w.extra_sales)} of extra sales: ${xr(w.return_x)} against a ${xr(w.break_even_x)} break-even, so it lost ${inr(Math.abs(w.profit))}. ${inr(w.to_returning)} of it went to returning buyers who would have bought anyway.`,
 

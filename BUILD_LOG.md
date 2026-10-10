@@ -36,6 +36,35 @@ How AI tools were used, what they did, how they sped up the work, and where I ma
 - Tests: 58 passing (`npm test`): all `expected_outputs.json` values within tolerance, generator/aggregate per-group checks, 180-store pool and medians, MEERA15 140/90, privacy refusals and import scan, guardrails, all 11 red-team cases, smoke render of every route. `npm run build` passes. Playwright check at 390 px and 1366 px: no horizontal scroll, no console errors, approve → jump → override shows −₹31,248.
 - Time taken: one session.
 
+### 2026-10-10 — v2: production-style dashboard, live Ray fix, payments data
+- Built:
+  - **Dashboard shell**, in the style of a payments console, replacing the slide-like tab bar:
+    - top nav: Ray AI, Payments, Agent Studio, Banking+, Payroll, More;
+    - Payments sidebar: Home, Transactions, Settlements, Reports, Offers & Coupons, other payment products, Smart Offers Agent, Account & Settings;
+    - concept bar fixed at the bottom with the demo date, Play demo and Reset.
+  - **Six-month synthetic ledger:** payments, orders, refunds, disputes and settlements.
+  - **Pages:** Transactions (filters, search, payment drawer), Settlements (T+1 plus instant "Settle now"), Reports (CSV downloads), Offers & Coupons, and Smart Offers (results, setup & plan, checkout preview, creator codes).
+  - **Agent Studio:** a list of agents, and a Smart Offers Agent page with daily 06:00 runs, the transactions it decided, guardrails and an activity log.
+  - **Ray as a chat page:** guided setup in four questions, cards, follow-up chips, and payment, settlement and refund tools.
+  - **Live/Demo toggle** with a health check.
+- Key decisions (owner's answers):
+  - 6 months of data; UPI 50%, cards 40%, netbanking and wallets 10%; fee 2%.
+  - Settlement options T+1 and instant; a few refunds and failures.
+  - Banking+ and Payroll as overview pages.
+  - No Razorpay logo or wordmark, and no access to the owner's real account (synthetic data rule).
+- Live mode fix: the old client silently locked into demo mode after one failed call and showed "Demo mode" before any call. Now:
+  - the function has a GET health check and returns JSON errors with reasons;
+  - a 9-second upstream timeout fits Netlify's limit;
+  - Sonnet 5.5 runs with `between_tools` thinking and low effort, which makes each round faster;
+  - every failed live answer shows its reason and retries on the next message.
+- Changed from spec (and why):
+  - The prototype tab bar and numbered screens were removed at the owner's request ("production-ready, everything inside the dashboard").
+  - Setup in Ray is a guided form in both modes, so the plan is built from validated inputs.
+  - Server-side refusal fallbacks are not sent alongside `between_tools` thinking; refusals return a polite message instead.
+  - Instant settlement fee (0.25%) is demo pricing, labelled as such.
+- Tests: 76 passing (ledger mix, fees, settlements netting, demo-date cut-off; new Ray intents; guided-setup parsing; smoke render of 14 routes). Build passes. Playwright at 390 px and 1366 px: no horizontal scroll, Ray setup → approve → jump → runs flow works.
+- Not done: the owner's two YouTube videos and razorpay.com could not be opened from the build environment (network policy), so the design follows the owner's screenshots and `design/reference.html`.
+
 ## Open questions
 <!-- Claude Code adds unclear spec points here with the option it chose. -->
 - SPEC 5.2 asks the aggregated baseline "conversions within 0.5%" of the fixture, but the baseline month includes code lifts, so it can't match `base_conversion`. Chose: compare with the fixture-implied rate (base + share × code lift); checkouts exact, AOV exact to the rupee.

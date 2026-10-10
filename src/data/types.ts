@@ -36,10 +36,42 @@ export type RzpPayment = {
   entity: 'payment';
   amount: number;
   currency: 'INR';
-  status: 'captured' | 'failed';
+  status: 'captured' | 'failed' | 'refunded';
   order_id: string;
   method: 'upi' | 'card' | 'netbanking' | 'wallet';
   created_at: number;
+  // Optional fields below mirror Razorpay's payment object; filled by the ledger generator.
+  captured?: boolean;
+  fee?: number; // paise, platform fee
+  tax?: number; // paise, GST on the fee
+  amount_refunded?: number;
+  refund_status?: 'partial' | 'full' | null;
+  email?: string; // masked
+  contact?: string; // masked
+  vpa?: string; // masked, UPI
+  bank?: string; // netbanking
+  wallet?: string;
+  card?: { network: string; last4: string; type: 'credit' | 'debit' };
+  error_code?: string;
+  error_description?: string;
+  offer_id?: OfferId; // Smart Offer applied at checkout, if any
+};
+
+export type RzpRefund = {
+  id: `rfnd_${string}`; entity: 'refund'; amount: number; currency: 'INR'; payment_id: string;
+  created_at: number; status: 'processed' | 'pending'; speed_processed: 'normal' | 'instant'; notes: { reason?: string };
+};
+
+export type RzpDispute = {
+  id: `disp_${string}`; entity: 'dispute'; payment_id: string; amount: number; currency: 'INR';
+  reason_code: string; status: 'open' | 'under_review' | 'won' | 'lost'; created_at: number; respond_by: number;
+};
+
+export type RzpSettlement = {
+  id: `setl_${string}`; entity: 'settlement'; amount: number; fees: number; tax: number; utr: string;
+  status: 'processed' | 'scheduled'; created_at: number; // settlement date
+  covers: { from: number; to: number; payments: number; refunds: number };
+  type: 'standard' | 'instant';
 };
 
 export type LineItem = { sku: string; name: string; category: string; price: number; qty: number };

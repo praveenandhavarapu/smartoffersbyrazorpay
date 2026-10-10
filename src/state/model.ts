@@ -4,7 +4,7 @@ import { MockDataSource } from '../data/adapters/mock/MockDataSource';
 import { poolLifts, similarPoolSize, networkSize, type LiftTable } from '../data/network/peers';
 import { pilotCountsFromSessions } from '../data/aggregate';
 import { PILOT_DAY20 } from '../lib/dates';
-import type { CreatorCode, GroupId, GroupStats, MerchantProfile } from '../data/types';
+import type { CheckoutSession, CreatorCode, GroupId, GroupStats, MerchantProfile } from '../data/types';
 import type { ArmCounts } from '../engine/measure';
 
 export type Model = {
@@ -14,6 +14,7 @@ export type Model = {
   creators: CreatorCode[];
   pool: { size: number; network: number; p25: LiftTable; p75: LiftTable };
   pilot20Counts: Record<GroupId, ArmCounts>;
+  pilotSessions: CheckoutSession[];
 };
 
 export const dataSource: DataSource = new MockDataSource();
@@ -31,6 +32,7 @@ export function loadModel(ds: DataSource = dataSource): Promise<Model> {
       source: ds.name, profile, groups, creators,
       pool: { size: similarPoolSize(), network: networkSize(), p25: pl.p25, p75: pl.p75 },
       pilot20Counts: pilotCountsFromSessions(pilot.filter((s) => s.arm !== 'pre_pilot')),
+      pilotSessions: pilot.filter((s) => s.arm !== 'pre_pilot'),
     };
   })();
   pending.catch(() => { pending = null; });
