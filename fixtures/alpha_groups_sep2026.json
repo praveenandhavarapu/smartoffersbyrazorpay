@@ -1,0 +1,138 @@
+{
+  "month": "2026-09",
+  "note": "30 days before the pilot (22 Aug - 20 Sep 2026), shown in the UI as \"last month\". Monthly checkouts per shopper group. base_conversion = estimated buy rate with NO offer. lifts_pp = extra buyers per 100 checkouts for each offer: the median of Alpha's similar-store pool (network prior). today = the codes this group actually used in that period.",
+  "groups": [
+    {
+      "id": "new_ads_small",
+      "label": "New · from Instagram/Meta ads · cart under ₹1,500",
+      "rule": "first order AND source=paid_social AND cart_value < 1500",
+      "checkouts": 1500,
+      "aov_inr": 1150,
+      "base_conversion": 0.24,
+      "lifts_pp": {
+        "free_shipping": 7,
+        "flat_100": 8
+      },
+      "today": [
+        {
+          "code": "ALPHA10",
+          "share": 1.0,
+          "discount_inr": 115,
+          "lift_pp": 8.5
+        }
+      ]
+    },
+    {
+      "id": "new_ads_big",
+      "label": "New · from Instagram/Meta ads · cart ₹1,500+",
+      "rule": "first order AND source=paid_social AND cart_value >= 1500",
+      "checkouts": 600,
+      "aov_inr": 2400,
+      "base_conversion": 0.28,
+      "lifts_pp": {
+        "flat_100": 4,
+        "flat_200": 9
+      },
+      "today": [
+        {
+          "code": "ALPHA10",
+          "share": 1.0,
+          "discount_inr": 200,
+          "lift_pp": 9
+        }
+      ]
+    },
+    {
+      "id": "new_creator",
+      "label": "New · from a creator link (no code typed)",
+      "rule": "first order AND source=creator",
+      "checkouts": 900,
+      "aov_inr": 1350,
+      "base_conversion": 0.33,
+      "lifts_pp": {
+        "free_shipping": 4,
+        "flat_100": 5
+      },
+      "today": [
+        {
+          "code": "CREATOR15",
+          "share": 1.0,
+          "discount_inr": 202,
+          "lift_pp": 6
+        }
+      ]
+    },
+    {
+      "id": "new_organic",
+      "label": "New · organic or direct",
+      "rule": "first order AND source in (organic, direct, search)",
+      "checkouts": 450,
+      "aov_inr": 1300,
+      "base_conversion": 0.3,
+      "lifts_pp": {
+        "free_shipping": 6,
+        "flat_100": 7
+      },
+      "today": [
+        {
+          "code": "ALPHA10",
+          "share": 1.0,
+          "discount_inr": 130,
+          "lift_pp": 7.5
+        }
+      ]
+    },
+    {
+      "id": "returning",
+      "label": "Returning · ordered in the last 120 days",
+      "rule": "has order AND days_since_last_order <= 120",
+      "checkouts": 800,
+      "aov_inr": 1700,
+      "base_conversion": 0.55,
+      "lifts_pp": {
+        "flat_100": 2,
+        "flat_200": 3
+      },
+      "today": [
+        {
+          "code": "ALPHA10",
+          "share": 0.6,
+          "discount_inr": 170,
+          "lift_pp": 2.5
+        },
+        {
+          "code": "CREATOR15",
+          "share": 0.25,
+          "discount_inr": 250,
+          "lift_pp": 3
+        }
+      ]
+    },
+    {
+      "id": "lapsed",
+      "label": "Lapsed · last order 120+ days ago",
+      "rule": "has order AND days_since_last_order > 120",
+      "checkouts": 250,
+      "aov_inr": 1450,
+      "base_conversion": 0.35,
+      "lifts_pp": {
+        "free_shipping": 5,
+        "flat_100": 10
+      },
+      "today": [
+        {
+          "code": "ALPHA10",
+          "share": 1.0,
+          "discount_inr": 145,
+          "lift_pp": 11
+        }
+      ]
+    }
+  ],
+  "period": {
+    "label": "Before Smart Offers",
+    "start": "2026-08-22",
+    "end": "2026-09-20",
+    "days": 30
+  }
+}

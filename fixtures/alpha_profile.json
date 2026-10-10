@@ -1,0 +1,59 @@
+{
+  "merchant_id": "acc_ALPHAAPP0001",
+  "legal_name": "Alpha Apparel Private Limited",
+  "display_name": "Alpha Apparel",
+  "founder_display_name": "Praveen",
+  "category": "fashion_apparel",
+  "sub_category": "fast_fashion_casual",
+  "story": "Influencer-first fast-fashion brand. Started selling through Instagram and YouTube creators in 2024; own Shopify store with Magic Checkout since Aug 2025. Repeat orders are growing.",
+  "instagram_started": "2024-06-01",
+  "d2c_site_live_since": "2025-08-01",
+  "platform": "shopify",
+  "checkout": "magic_checkout",
+  "price_bands_inr": {
+    "tees_and_shirts": [
+      1000,
+      1500
+    ],
+    "pants_and_others": [
+      1500,
+      2000
+    ]
+  },
+  "gross_margin_pct": 40,
+  "shipping_fee_inr": 79,
+  "free_shipping_threshold_inr": 1500,
+  "cod_share_pct": 38,
+  "demo_today": "2026-10-10 (results view); 2026-09-21 (before approval)",
+  "pilot": {
+    "start": "2026-09-21",
+    "length_days": 30,
+    "day_shown": 20,
+    "holdout_pct": 10,
+    "old_way_group_pct": 0
+  },
+  "notes": "old_way_group is recommended for real pilots; set to 0 in the demo so numbers match expected_outputs.json",
+  "repeat": {
+    "new_customer_repeat_rate_180d": 0.22,
+    "repeat_aov_inr": 1600,
+    "note": "used only by the \"most new customers\" goal: value of a new customer = rate x aov x margin = ₹140.8"
+  },
+  "upcoming_drop": {
+    "name": "Festive Drop '26",
+    "launch": "2026-10-16",
+    "full_price_days": 7,
+    "styles": 24
+  },
+  "billing": {
+    "pilot_days": 30,
+    "fee_pct_of_proven_extra_sales": 1.0,
+    "fee_cap_pct_of_extra_profit": 20,
+    "proven_means": "lower bound of the 90% range"
+  },
+  "demo_clock": {
+    "before_approval": "2026-09-21",
+    "results_day_20": "2026-10-10",
+    "results_day_60": "2026-11-19",
+    "note": "Home and Setup run on 21 Sep 2026 (pre-approval). After Approve, a \"20 days later\" step moves the demo to 10 Oct 2026. Reset returns to 21 Sep."
+  }
+}
