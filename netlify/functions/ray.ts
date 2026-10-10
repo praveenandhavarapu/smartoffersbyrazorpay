@@ -29,18 +29,18 @@ function readKey(): { key: string; cleaned: boolean; hint: { starts_with: string
   return { key, cleaned: key !== raw, hint: { starts_with: visible.slice(0, 4), length: visible.length } };
 }
 
-/** Shape only (never the value): a Console API key starts with sk-ant-api. */
+/** Shape only (never the value): Console API keys start with sk-ant-api (workspace keys) or sk-ant-usr (user-linked keys). */
 function keyFormat(key: string): 'api_key' | 'admin_key' | 'oauth_token' | 'unknown' | 'missing' {
   if (!key) return 'missing';
-  if (key.startsWith('sk-ant-api')) return 'api_key';
+  if (key.startsWith('sk-ant-api') || key.startsWith('sk-ant-usr')) return 'api_key';
   if (key.startsWith('sk-ant-admin')) return 'admin_key';
   if (key.startsWith('sk-ant-oat')) return 'oauth_token';
   return 'unknown';
 }
 
 const FORMAT_HELP: Record<string, string> = {
-  admin_key: 'This is an Admin key (sk-ant-admin…). Ray needs a normal API key: console.anthropic.com → API keys → Create key (it starts with sk-ant-api).',
-  oauth_token: 'This looks like a Claude subscription/OAuth token (sk-ant-oat…), not an API key. Create one at console.anthropic.com → API keys (it starts with sk-ant-api).',
+  admin_key: 'This is an Admin key (sk-ant-admin…). Ray needs a normal API key: console.anthropic.com → API keys → Create key (it starts with sk-ant-api or sk-ant-usr).',
+  oauth_token: 'This looks like a Claude subscription/OAuth token (sk-ant-oat…), not an API key. Create one at console.anthropic.com → API keys (it starts with sk-ant-api or sk-ant-usr).',
   unknown: 'The value does not look like an Anthropic API key (they start with sk-ant-). Paste the full key from console.anthropic.com → API keys.',
 };
 
