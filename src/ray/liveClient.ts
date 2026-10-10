@@ -26,7 +26,7 @@ export async function checkHealth(): Promise<Health> {
     if (!(res.headers.get('content-type') ?? '').includes('application/json')) return { state: 'off', reason: 'The live function is not deployed here (local preview or pull-request link).' };
     const data = (await res.json()) as { configured?: boolean; model?: string; key_format?: string; verified?: boolean; reason?: string };
     if (!data.configured) return { state: 'off', reason: 'No ANTHROPIC_API_KEY on this deploy. Add it in Netlify and redeploy.' };
-    if (data.key_format === 'admin_key' || data.key_format === 'oauth_token') return { state: 'off', reason: `ANTHROPIC_API_KEY is ${data.key_format === 'admin_key' ? 'an Admin key' : 'a subscription (OAuth) token'}, not an API key. Create one at console.anthropic.com → API keys (starts with sk-ant-api), then redeploy.` };
+    if (data.key_format === 'admin_key' || data.key_format === 'oauth_token') return { state: 'off', reason: `ANTHROPIC_API_KEY is ${data.key_format === 'admin_key' ? 'an Admin key' : 'a subscription (OAuth) token'}, not an API key. Create one at console.anthropic.com → API keys (starts with sk-ant-api or sk-ant-usr), then redeploy.` };
     if (data.verified === false) return { state: 'off', reason: data.reason ?? 'Anthropic did not accept the key.' };
     return { state: 'ready', model: data.model ?? 'Claude' };
   } catch {
