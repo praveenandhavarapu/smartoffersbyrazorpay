@@ -9,7 +9,7 @@ import { OFFER_BY_ID } from '../../data/fixtures';
 import { Clover, Send } from './Icons';
 import { OfferChip, shortGroup } from './bits';
 import { PlanCard } from './PlanCard';
-import { ApprovedCard, CreatorsCard, PaymentsCard, PaymentsListCard, RefundsCard, ResultsCard, SettlementsCard, WasteCard } from './RayCards';
+import { ApprovedCard, CreatorsCard, DailyCard, PaymentsCard, PaymentsListCard, RefundsCard, ResultsCard, SettlementsCard, WasteCard } from './RayCards';
 
 /** Live/Demo switch. Live is disabled (with the reason) when the function has no key or isn't deployed. */
 export function ModeToggle() {
@@ -84,6 +84,7 @@ function CardView({ card, onAsk }: { card: RayCard; onAsk: (q: string) => void }
     case 'draft': return <DraftCard draft={card.draft} />;
     case 'waste': return <WasteCard onFix={() => onAsk('Set up Smart Offers')} />;
     case 'payments': return <PaymentsCard d={card.data} />;
+    case 'daily': return <DailyCard d={card.data} />;
     case 'payments_list': return <PaymentsListCard title={card.title} d={card.data} />;
     case 'settlements': return <SettlementsCard d={card.data} />;
     case 'refunds': return <RefundsCard d={card.data} />;

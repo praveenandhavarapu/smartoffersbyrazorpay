@@ -16,7 +16,7 @@ import type { Derived } from '../state/derived';
 import { marginOf, type Settings } from '../state/store';
 import { toPlanSettings } from '../state/derived';
 import type { ToolName } from './toolSchemas';
-import { lastDays, paymentSummary, settlementSummary, unsettledBalance, inRange, type InstantSettlement, type LedgerView } from '../data/ledgerQueries';
+import { dailySeries, lastDays, paymentSummary, settlementSummary, unsettledBalance, inRange, type InstantSettlement, type LedgerView } from '../data/ledgerQueries';
 import { fmtDate } from '../lib/dates';
 
 const rupees = (p: number) => roundHalfEven(p / 100);
@@ -65,6 +65,21 @@ export const tools = {
       method_mix: Object.fromEntries(Object.entries(s.byMethod).map(([k, v]) => [k, { count: v.count, amount: rupees(v.amount), share_pct: s.capturedCount ? O((v.count / s.capturedCount) * 100) : 0 }])),
       payments_with_smart_offer: s.smartOfferPayments,
       note: 'Online payments only; cash-on-delivery orders are not payments.',
+    };
+  },
+  get_daily_payments(ctx: RayCtx, a: { days?: number } = {}) {
+    const days = typeof a.days === 'number' && Number.isFinite(a.days) ? Math.min(60, Math.max(2, Math.round(a.days))) : 10;
+    const s = dailySeries(ctx.ledger, days);
+    const rows = s.map((d) => ({ date: dateOf(d.day * 86400), collected: rupees(d.collected), payments: d.count, failed: d.failed, refunded: rupees(d.refunded) }));
+    const best = rows.reduce((m, r) => (r.collected > m.collected ? r : m), rows[0]);
+    const worst = rows.reduce((m, r) => (r.collected < m.collected ? r : m), rows[0]);
+    const half = Math.floor(rows.length / 2);
+    const avg = (xs: typeof rows) => (xs.length ? xs.reduce((x, r) => x + r.collected, 0) / xs.length : 0);
+    return {
+      days, window: `${rows[0].date} – ${rows[rows.length - 1].date}`, daily: rows,
+      total_collected: rows.reduce((x, r) => x + r.collected, 0), average_per_day: Math.round(avg(rows)),
+      best_day: { date: best.date, collected: best.collected }, lowest_day: { date: worst.date, collected: worst.collected },
+      second_half_vs_first_half_pct: half && avg(rows.slice(0, half)) ? O(((avg(rows.slice(half)) / avg(rows.slice(0, half))) - 1) * 100) : 0,
     };
   },
   list_payments(ctx: RayCtx, a: { status?: string; method?: string; limit?: number } = {}) {
@@ -173,6 +188,7 @@ export function runTool(ctx: RayCtx, name: string, args: Record<string, unknown>
   const a = args ?? {};
   switch (name) {
     case 'get_payments_summary': return tools.get_payments_summary(ctx, { days: a.days as number });
+    case 'get_daily_payments': return tools.get_daily_payments(ctx, { days: a.days as number });
     case 'list_payments': return tools.list_payments(ctx, {
       status: ['captured', 'failed', 'refunded'].includes(a.status as string) ? (a.status as string) : undefined,
       method: ['upi', 'card', 'netbanking', 'wallet'].includes(a.method as string) ? (a.method as string) : undefined,

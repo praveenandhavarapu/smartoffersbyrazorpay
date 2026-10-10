@@ -134,6 +134,9 @@ describe('Ray red-team (demo mode, SPEC 8.5)', () => {
     expect(pay.text).toMatch(/₹/);
     expect(route('Show my failed payments', ctx).intent).toBe('failed_payments');
     expect(route('Any disputes?', ctx).intent).toBe('refunds');
+    const dod = route('give me DoD graph of txn details of last 10 days', ctx);
+    expect(dod.intent).toBe('daily');
+    if (dod.card?.kind === 'daily') expect(dod.card.data.daily).toHaveLength(10);
     expect(route('How are my offers and coupons doing?', ctx).card?.kind).toBe('waste');
     expect(route('Payments', ctx).quick?.length).toBeGreaterThan(0);
   });
