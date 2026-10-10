@@ -17,6 +17,28 @@ const MAX_MESSAGES = 60;
 const UPSTREAM_TIMEOUT_MS = 9000;
 const hits = new Map<string, number[]>();
 
+/** The key as Netlify stores it, minus stray spaces, newlines or quotes from copy-paste. */
+function readKey(): { key: string; cleaned: boolean } {
+  const raw = process.env.ANTHROPIC_API_KEY ?? '';
+  const key = raw.trim().replace(/^["']+|["']+$/g, '').trim();
+  return { key, cleaned: key !== raw };
+}
+
+/** Shape only (never the value): a Console API key starts with sk-ant-api. */
+function keyFormat(key: string): 'api_key' | 'admin_key' | 'oauth_token' | 'unknown' | 'missing' {
+  if (!key) return 'missing';
+  if (key.startsWith('sk-ant-api')) return 'api_key';
+  if (key.startsWith('sk-ant-admin')) return 'admin_key';
+  if (key.startsWith('sk-ant-oat')) return 'oauth_token';
+  return 'unknown';
+}
+
+const FORMAT_HELP: Record<string, string> = {
+  admin_key: 'This is an Admin key (sk-ant-admin…). Ray needs a normal API key: console.anthropic.com → API keys → Create key (it starts with sk-ant-api).',
+  oauth_token: 'This looks like a Claude subscription/OAuth token (sk-ant-oat…), not an API key. Create one at console.anthropic.com → API keys (it starts with sk-ant-api).',
+  unknown: 'The value does not look like an Anthropic API key (they start with sk-ant-api). Paste the full key from console.anthropic.com → API keys.',
+};
+
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 
@@ -30,9 +52,25 @@ function limited(ip: string): boolean {
 }
 
 export default async (req: Request): Promise<Response> => {
-  if (req.method === 'GET') return json(200, { configured: Boolean(process.env.ANTHROPIC_API_KEY), model: MODEL });
+  const { key, cleaned } = readKey();
+  const format = keyFormat(key);
+  if (req.method === 'GET') {
+    const base = { configured: format !== 'missing', model: MODEL, key_format: format, key_had_spaces_or_quotes: cleaned };
+    if (format !== 'api_key' || !new URL(req.url).searchParams.has('verify')) return json(200, base);
+    // Cheap check that Anthropic accepts the key (no tokens used): look up the model.
+    try {
+      await new Anthropic({ apiKey: key, timeout: 5000, maxRetries: 0 }).models.retrieve(MODEL);
+      return json(200, { ...base, verified: true });
+    } catch (err) {
+      const reason = err instanceof Anthropic.AuthenticationError ? 'Anthropic rejected this key (401). Create a new key at console.anthropic.com → API keys, paste it in Netlify, then redeploy.'
+        : err instanceof Anthropic.NotFoundError || err instanceof Anthropic.PermissionDeniedError ? `The key works but cannot use ${MODEL}. Set ANTHROPIC_MODEL in Netlify to a model your account has.`
+        : 'Could not verify the key right now.';
+      return json(200, { ...base, verified: false, reason });
+    }
+  }
   if (req.method !== 'POST') return json(405, { error: 'Use GET or POST' });
-  if (!process.env.ANTHROPIC_API_KEY) return json(503, { error: 'not_configured', detail: 'ANTHROPIC_API_KEY is not set for this deploy. Add it in Netlify → Environment variables, then redeploy.' });
+  if (format === 'missing') return json(503, { error: 'not_configured', detail: 'ANTHROPIC_API_KEY is not set for this deploy. Add it in Netlify → Environment variables, then redeploy.' });
+  if (format !== 'api_key') return json(502, { error: 'key_format', detail: FORMAT_HELP[format] });
 
   let body: { messages?: Anthropic.Beta.BetaMessageParam[]; newTurn?: boolean; merchant?: string };
   try { body = await req.json(); } catch { return json(400, { error: 'bad_json', detail: 'Request body was not JSON.' }); }
@@ -44,7 +82,7 @@ export default async (req: Request): Promise<Response> => {
 
   // Sonnet 5.5: thinking only between tool calls keeps each round fast enough for Netlify's time limit.
   const thinking = MODEL.startsWith('claude-sonnet-5-5') ? { thinking: { type: 'between_tools' as const } } : {};
-  const client = new Anthropic({ timeout: UPSTREAM_TIMEOUT_MS, maxRetries: 0 });
+  const client = new Anthropic({ apiKey: key, timeout: UPSTREAM_TIMEOUT_MS, maxRetries: 0 });
   try {
     const response = await client.beta.messages.create({
       model: MODEL,
@@ -62,7 +100,7 @@ export default async (req: Request): Promise<Response> => {
     return json(200, { content: response.content, stop_reason: response.stop_reason, model: response.model });
   } catch (err) {
     if (err instanceof Anthropic.APIConnectionTimeoutError) return json(504, { error: 'timeout', detail: `Claude took longer than ${UPSTREAM_TIMEOUT_MS / 1000} s (Netlify's function limit is about 10 s).` });
-    if (err instanceof Anthropic.AuthenticationError) return json(502, { error: 'auth', detail: 'Anthropic rejected the API key. Check the key in Netlify → Environment variables.' });
+    if (err instanceof Anthropic.AuthenticationError) return json(502, { error: 'auth', detail: 'Anthropic rejected the API key (401). Create a new key at console.anthropic.com → API keys, replace the value in Netlify, then trigger a new deploy (keys only apply after a deploy).' });
     if (err instanceof Anthropic.PermissionDeniedError) return json(502, { error: 'permission', detail: `This key can't use ${MODEL}. Set ANTHROPIC_MODEL to a model your account can use.` });
     if (err instanceof Anthropic.NotFoundError) return json(502, { error: 'model', detail: `Model ${MODEL} was not found for this key. Set ANTHROPIC_MODEL in Netlify.` });
     if (err instanceof Anthropic.RateLimitError) return json(429, { error: 'upstream_rate_limit', detail: 'Anthropic rate limit or no credit left on the key.' });

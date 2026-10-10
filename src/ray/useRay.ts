@@ -20,6 +20,7 @@ function cardsFromCalls(calls: ToolCall[]): { cards: RayCard[]; quick: QuickRepl
     if (!r || 'error' in r) continue;
     switch (c.name) {
       case 'get_payments_summary': byKind.set('payments', { kind: 'payments', data: r as never }); quick = FOLLOW_UPS.payments; break;
+      case 'get_daily_payments': byKind.set('daily', { kind: 'daily', data: r as never }); quick = FOLLOW_UPS.payments; break;
       case 'list_payments': byKind.set('list', { kind: 'payments_list', title: 'Payments', data: r as never }); quick = FOLLOW_UPS.payments; break;
       case 'get_settlements': byKind.set('settlements', { kind: 'settlements', data: r as never }); quick = FOLLOW_UPS.settlements; break;
       case 'get_refunds_and_disputes': byKind.set('refunds', { kind: 'refunds', data: r as never }); quick = FOLLOW_UPS.refunds; break;

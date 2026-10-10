@@ -10,6 +10,7 @@ type Bench = ReturnType<typeof tools.get_peer_benchmark>;
 type Creators = ReturnType<typeof tools.get_creator_code_report>;
 type Current = ReturnType<typeof tools.get_current_plan>;
 type Pay = ReturnType<typeof tools.get_payments_summary>;
+type Daily = ReturnType<typeof tools.get_daily_payments>;
 type Setl = ReturnType<typeof tools.get_settlements>;
 type Ref = ReturnType<typeof tools.get_refunds_and_disputes>;
 
@@ -18,6 +19,7 @@ const offersOn = (s: Sim) => s.rows.filter((r) => r.offer !== 'none');
 export const T = {
   help: () => "Here's what I can help with: payments, settlements, refunds and disputes for any period; how your coupons are doing; setting up Smart Offers and testing a budget, margin or return target; explaining why a shopper group gets an offer; and pilot results against the holdout.",
   payments: (s: Pay) => `${s.window}: ${inr(s.collected)} collected from ${num(s.captured_payments)} payments (${num(s.success_rate_pct, 1)}% success rate, ${num(s.failed_payments)} failed). UPI ${num(s.method_mix.upi.share_pct, 0)}%, cards ${num(s.method_mix.card.share_pct, 0)}%. ${s.refunds ? `${num(s.refunds)} refunds (${inr(s.refunded)}).` : 'No refunds.'} Fees ${inr(s.fees)} + GST ${inr(s.gst_on_fees)}.`,
+  daily: (g: Daily) => `Day by day, ${g.window}: ${inr(g.total_collected)} collected, about ${inr(g.average_per_day)} a day. Best day ${g.best_day.date} (${inr(g.best_day.collected)}), lowest ${g.lowest_day.date} (${inr(g.lowest_day.collected)}). The second half of the period is ${g.second_half_vs_first_half_pct >= 0 ? 'up' : 'down'} ${num(Math.abs(g.second_half_vs_first_half_pct), 1)}% on the first.`,
   failed: (s: Pay) => `${num(s.failed_payments)} payments failed in ${s.window} (success rate ${num(s.success_rate_pct, 1)}%). Most failures are cancelled or expired UPI requests and failed card OTPs; customers usually retry. Here are the latest ones.`,
   settlements: (s: Setl, next: boolean) => {
     const nx = s.next_scheduled ? `Next settlement: ${inr(s.next_scheduled.amount)} on ${s.next_scheduled.date}.` : 'No settlement is scheduled right now.';

@@ -99,3 +99,18 @@ export function monthly(v: LedgerView) {
 }
 
 export const paise = (p: number): number => p / 100;
+
+/** Day-by-day captured payments for the last N days (IST days, oldest first). */
+export function dailySeries(v: LedgerView, days: number) {
+  const r = lastDays(v, days);
+  const out: { day: number; collected: number; count: number; failed: number; refunded: number }[] = [];
+  for (let d = istDay(r.from); d < istDay(r.to); d++) out.push({ day: d, collected: 0, count: 0, failed: 0, refunded: 0 });
+  const at = (t: number) => out[istDay(t) - istDay(r.from)];
+  for (const p of v.payments) {
+    if (!inRange(p.created_at, r)) continue;
+    const b = at(p.created_at);
+    if (p.captured) { b.collected += p.amount; b.count++; } else if (p.status === 'failed') b.failed++;
+  }
+  for (const f of v.refunds) if (inRange(f.created_at, r)) at(f.created_at).refunded += f.amount;
+  return out;
+}

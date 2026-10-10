@@ -65,7 +65,14 @@ How AI tools were used, what they did, how they sped up the work, and where I ma
 - Tests: 76 passing (ledger mix, fees, settlements netting, demo-date cut-off; new Ray intents; guided-setup parsing; smoke render of 14 routes). Build passes. Playwright at 390 px and 1366 px: no horizontal scroll, Ray setup → approve → jump → runs flow works.
 - Not done: the owner's two YouTube videos and razorpay.com could not be opened from the build environment (network policy), so the design follows the owner's screenshots and `design/reference.html`.
 
-## Open questions
+### 2026-10-10 — Live key diagnostics and day-on-day chart
+- Owner saw "Anthropic rejected the API key". The function now:
+  - trims spaces, newlines and quotes from the key;
+  - reports the key's format (API key, admin key, OAuth token);
+  - verifies the key with a free model lookup (`GET ?verify=1`), so the Live toggle is disabled with the exact reason before anyone asks a question.
+- New Ray tool `get_daily_payments` and a day-by-day chart card. "Give me DoD graph of txn details of last 10 days" now draws the chart in both modes.
+- Tests: 76 passing; build passes.
+
 <!-- Claude Code adds unclear spec points here with the option it chose. -->
 - SPEC 5.2 asks the aggregated baseline "conversions within 0.5%" of the fixture, but the baseline month includes code lifts, so it can't match `base_conversion`. Chose: compare with the fixture-implied rate (base + share × code lift); checkouts exact, AOV exact to the rupee.
 - "About −2.9%" for the best reachable orders change is −2.85% exactly (rounds to −2.8 half-even). Chose: test with the spec's ±0.1 tolerance.

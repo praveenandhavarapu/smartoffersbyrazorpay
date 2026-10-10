@@ -15,6 +15,7 @@ export type RayCard =
   | { kind: 'help'; items: QuickReply[] }
   | { kind: 'waste' }
   | { kind: 'payments'; data: ReturnType<typeof tools.get_payments_summary> }
+  | { kind: 'daily'; data: ReturnType<typeof tools.get_daily_payments> }
   | { kind: 'payments_list'; title: string; data: ReturnType<typeof tools.list_payments> }
   | { kind: 'settlements'; data: ReturnType<typeof tools.get_settlements> }
   | { kind: 'refunds'; data: ReturnType<typeof tools.get_refunds_and_disputes> }
@@ -165,6 +166,13 @@ export function route(message: string, ctx: RayCtx): RayReply {
   // Account and support.
   if (/^(manage (my )?account|account settings?)\b/.test(t)) return reply('account', 'Account & Settings has your business profile, settlement schedule (next day or instant), Ray mode (Live or Demo), Smart Offers guardrails and the audit log. Open it from the left menu.', { quick: HELP });
   if (/^(support|help|help & support)$/.test(t)) return reply('help', T.help(), { card: { kind: 'help', items: HELP } });
+
+  // Day-on-day trend / graph.
+  if (/\bdod\b|\bday[- ]?on[- ]?day\b|\bday[- ]?by[- ]?day\b|\bdaily\b|\bper day\b|\bgraph\b|\bchart\b|\btrend\b|\beach day\b/.test(t) && !/\boffers?\b|\bcoupons?\b|\bplan\b|\bruns?\b/.test(t)) {
+    const n = days ?? 10;
+    const g = call('get_daily_payments', { days: n }, () => tools.get_daily_payments(ctx, { days: n }));
+    return reply('daily', T.daily(g), { card: { kind: 'daily', data: g }, quick: FOLLOW_UPS.payments });
+  }
 
   // Payments, settlements, refunds (dashboard data).
   if (/\bsettle(ment|ments|d)?\b|\bpayouts?\b|\butr\b/.test(t)) {

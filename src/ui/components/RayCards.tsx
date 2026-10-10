@@ -7,7 +7,7 @@ import type { tools } from '../../ray/tools';
 import { inr, inrSigned, num, pctOf, xr } from '../../lib/format';
 import { fmtDate } from '../../lib/dates';
 import { Check } from './Icons';
-import { MethodMix } from './charts';
+import { DailyBars, MethodMix } from './charts';
 import { Status } from './kit';
 import { shortGroup } from './bits';
 
@@ -56,6 +56,22 @@ export function PaymentsCard({ d }: { d: ReturnType<typeof tools.get_payments_su
         <div><span>Refunded</span><b>{inr(d.refunded)}</b></div>
       </div>
       <MethodMix mix={mix} />
+    </div>
+  );
+}
+
+export function DailyCard({ d }: { d: ReturnType<typeof tools.get_daily_payments> }) {
+  const nav = useNavigate();
+  return (
+    <div className="rcard">
+      <div className="rc-h"><span className="mono-tag">Collected per day · {d.window}</span><button className="btn ghost sm" onClick={() => nav(`/transactions?d=${d.days > 30 ? 90 : d.days > 7 ? 30 : 7}`)}>Open transactions →</button></div>
+      <DailyBars data={d.daily} />
+      <div className="rc-grid">
+        <div><span>Total</span><b>{inr(d.total_collected)}</b></div>
+        <div><span>Average / day</span><b>{inr(d.average_per_day)}</b></div>
+        <div><span>Best day</span><b>{inr(d.best_day.collected)}</b><em>{d.best_day.date}</em></div>
+        <div><span>Lowest day</span><b>{inr(d.lowest_day.collected)}</b><em>{d.lowest_day.date}</em></div>
+      </div>
     </div>
   );
 }

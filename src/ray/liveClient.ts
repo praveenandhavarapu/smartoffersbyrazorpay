@@ -22,10 +22,12 @@ export type Health = { state: 'ready'; model: string } | { state: 'off'; reason:
 /** GET health: is the function deployed and does it have a key? */
 export async function checkHealth(): Promise<Health> {
   try {
-    const res = await fetch(ENDPOINT, { method: 'GET', headers: { accept: 'application/json' } });
+    const res = await fetch(`${ENDPOINT}?verify=1`, { method: 'GET', headers: { accept: 'application/json' } });
     if (!(res.headers.get('content-type') ?? '').includes('application/json')) return { state: 'off', reason: 'The live function is not deployed here (local preview or pull-request link).' };
-    const data = (await res.json()) as { configured?: boolean; model?: string };
+    const data = (await res.json()) as { configured?: boolean; model?: string; key_format?: string; verified?: boolean; reason?: string };
     if (!data.configured) return { state: 'off', reason: 'No ANTHROPIC_API_KEY on this deploy. Add it in Netlify and redeploy.' };
+    if (data.key_format && data.key_format !== 'api_key') return { state: 'off', reason: `ANTHROPIC_API_KEY is not a normal API key (${data.key_format.replace('_', ' ')}). Use a key from console.anthropic.com → API keys (starts with sk-ant-api), then redeploy.` };
+    if (data.verified === false) return { state: 'off', reason: data.reason ?? 'Anthropic did not accept the key.' };
     return { state: 'ready', model: data.model ?? 'Claude' };
   } catch {
     return { state: 'off', reason: 'Could not reach the live function.' };
