@@ -1,0 +1,13 @@
+/* Design tokens copied from design/reference.html */
+:root{
+  --page:#E8EAEE;
+  --ray-bg:#F5F6F8; --surface:#FFFFFF; --ink:#0B1220; --ink2:#4A5468; --ink3:#8A93A5; --line:#E5E7EC; --line2:#EEF0F3;
+  --blue:#305EFF; --blue-d:#1F47E6; --blue-soft:#EEF2FF;
+  --green:#0E9F6E; --green-soft:#E7F6EF; --clover:#22C268;
+  --amber:#B54708; --amber-soft:#FFF4E5; --amber-line:#FCD9A8;
+  --red:#C9302C;
+  --nav:#09090B;
+  --st-bg:#050608; --st-card:#0D1015; --st-card2:#11151C; --st-line:#1C222B; --st-ink:#ECEFF3; --st-ink2:#9AA3B2; --st-green:#3DDC84;
+  --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}

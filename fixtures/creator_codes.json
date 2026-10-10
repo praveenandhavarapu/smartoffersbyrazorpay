@@ -1,0 +1,17 @@
+{
+  "note": "Fictional creators. 15% off, max ₹250. Monthly uses in Sep 2026. Returning-buyer uses are leakage (code found on coupon sites or reused by existing customers).",
+  "codes": [
+    { "code": "MEERA15",   "creator": "@stylewithmeera", "platform": "instagram", "uses": 140, "returning_uses": 90 },
+    { "code": "KABIR15",   "creator": "@kabirfits",      "platform": "youtube",   "uses": 48,  "returning_uses": 4 },
+    { "code": "ZOYA15",    "creator": "@zoyawears",      "platform": "instagram", "uses": 41,  "returning_uses": 3 },
+    { "code": "AYAAN15",   "creator": "@ayaanstreet",    "platform": "instagram", "uses": 37,  "returning_uses": 3 },
+    { "code": "ISHA15",    "creator": "@ishadaily",      "platform": "youtube",   "uses": 33,  "returning_uses": 3 },
+    { "code": "DEVANSH15", "creator": "@devanshdrip",    "platform": "instagram", "uses": 31,  "returning_uses": 2 },
+    { "code": "TANYA15",   "creator": "@tanyatries",     "platform": "instagram", "uses": 28,  "returning_uses": 2 },
+    { "code": "RHEA15",    "creator": "@rheaoutfits",    "platform": "instagram", "uses": 26,  "returning_uses": 2 },
+    { "code": "VIVAAN15",  "creator": "@vivaanvlogs",    "platform": "youtube",   "uses": 24,  "returning_uses": 2 },
+    { "code": "SARA15",    "creator": "@saracloset",     "platform": "instagram", "uses": 22,  "returning_uses": 2 },
+    { "code": "KIARA15",   "creator": "@kiarakurates",   "platform": "instagram", "uses": 20,  "returning_uses": 2 },
+    { "code": "OMKAR15",   "creator": "@omkarstyles",    "platform": "youtube",   "uses": 17,  "returning_uses": 1 }
+  ]
+}

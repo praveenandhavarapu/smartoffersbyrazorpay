@@ -1,0 +1,21 @@
+{
+  "note": "True lifts the generator uses for the pilot period (21 Sep - 10 Oct 2026, day 20). Plan offers per group come from the engine; the generator applies these lifts to treated shoppers. Holdout = 10% of every group, no offer. Counts are exact: checkouts = round_half_up(monthly * 20/30 * arm_share); orders = round_half_up(checkouts * rate). plan_offers = the engine plan for the default settings (Part 3 can generate pilot data before the engine exists; the reference engine asserts they match).",
+  "days_elapsed": 20,
+  "actual_lift_pp": {
+    "new_ads_small": 7.5,
+    "new_ads_big": 9.5,
+    "new_organic": 5.5,
+    "lapsed": 11
+  },
+  "creator_codes_continue": true,
+  "alpha10_retired_on": "2026-09-21",
+  "plan_offers": {
+    "new_ads_small": "free_shipping",
+    "new_ads_big": "flat_200",
+    "new_creator": "none",
+    "new_organic": "free_shipping",
+    "returning": "none",
+    "lapsed": "flat_100"
+  },
+  "day_60": "Days 21-60 use the same counts formula; Day 60 results may be computed from counts without generating sessions."
+}

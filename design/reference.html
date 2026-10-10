@@ -1,0 +1,849 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Offers Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --page:#E8EAEE;
+  --ray-bg:#F5F6F8; --surface:#FFFFFF; --ink:#0B1220; --ink2:#4A5468; --ink3:#8A93A5; --line:#E5E7EC; --line2:#EEF0F3;
+  --blue:#305EFF; --blue-d:#1F47E6; --blue-soft:#EEF2FF;
+  --green:#0E9F6E; --green-soft:#E7F6EF; --clover:#22C268;
+  --amber:#B54708; --amber-soft:#FFF4E5; --amber-line:#FCD9A8;
+  --red:#C9302C;
+  --nav:#09090B;
+  --st-bg:#050608; --st-card:#0D1015; --st-card2:#11151C; --st-line:#1C222B; --st-ink:#ECEFF3; --st-ink2:#9AA3B2; --st-green:#3DDC84;
+  --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--page);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;cursor:pointer}
+b{font-weight:600}
+
+/* ---------- prototype bar ---------- */
+.proto{position:sticky;top:0;z-index:50;background:#fff;border-bottom:1px solid var(--line);padding:10px 16px}
+.proto-in{max-width:1280px;margin:0 auto;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.proto-title{font-weight:700;font-size:14px;white-space:nowrap}
+.proto-note{font-size:12px;color:var(--ink3);flex:1;min-width:220px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tabs button{border:1px solid var(--line);background:#fff;color:var(--ink2);border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:500}
+.tabs button span{color:var(--ink3);margin-right:4px}
+.tabs button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.tabs button.on span{color:#9aa3b2}
+
+main{max-width:1280px;margin:20px auto 40px;padding:0 16px}
+.screen{display:none}
+.screen.on{display:block}
+.frame{border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.06),0 12px 32px rgba(16,24,40,.10);background:var(--ray-bg);min-height:760px;position:relative}
+.caption{font-size:12.5px;color:var(--ink2);margin:0 0 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.caption .step{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.06em;background:var(--ink);color:#fff;border-radius:6px;padding:3px 7px}
+
+/* ---------- Ray top nav ---------- */
+.ray-nav{height:56px;background:var(--nav);display:flex;align-items:center;gap:6px;padding:0 20px;position:relative}
+.ray-nav .items{display:flex;align-items:center;gap:4px;flex:1;overflow:hidden}
+.nav-item{display:flex;align-items:center;gap:7px;color:#B9BEC8;font-size:13.5px;font-weight:500;padding:8px 12px;border-radius:8px;white-space:nowrap}
+.nav-item svg{width:16px;height:16px}
+.nav-item.active{color:#fff;font-weight:600;position:relative}
+.nav-item.active::after{content:"";position:absolute;left:-10px;right:-10px;bottom:-18px;height:26px;background:radial-gradient(ellipse at center,rgba(34,194,104,.55),rgba(34,194,104,0) 70%);filter:blur(4px);pointer-events:none}
+.nav-item.active svg{color:var(--clover)}
+.ray-search{display:flex;align-items:center;gap:8px;background:#1A1B1F;border:1px solid #2A2C33;color:#8D93A0;border-radius:8px;padding:7px 12px;font-size:13px;min-width:220px}
+.ray-search svg{width:14px;height:14px}
+.avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#F2B8A0,#C77D63);color:#fff;font-weight:700;font-size:12px;display:grid;place-items:center;margin-left:8px;flex:none}
+
+/* ---------- shared bits ---------- */
+.clover{display:inline-grid;place-items:center;color:var(--clover)}
+.clover svg{width:100%;height:100%}
+.mono-tag{font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2);background:var(--line2);border:1px solid var(--line);border-radius:6px;padding:3px 7px;display:inline-block}
+.mono-tag.green{color:#0B7A55;background:var(--green-soft);border-color:#BFE8D6}
+.mono-tag.amber{color:var(--amber);background:var(--amber-soft);border-color:var(--amber-line)}
+.muted{color:var(--ink3)}
+.small{font-size:12px}
+.good{color:var(--green)!important}
+.btn{border-radius:8px;padding:9px 16px;font-size:13.5px;font-weight:600;border:1px solid transparent;display:inline-flex;align-items:center;gap:8px}
+.btn.primary{background:var(--blue);color:#fff}
+.btn.primary:hover{background:var(--blue-d)}
+.btn.secondary{background:#fff;color:var(--ink);border-color:var(--line)}
+.btn.ghost{background:transparent;color:var(--blue)}
+.btn svg{width:15px;height:15px}
+.pill{font-size:11.5px;font-weight:600;border-radius:999px;padding:3px 9px;display:inline-flex;align-items:center;gap:6px}
+.pill.live{background:var(--green-soft);color:#0B7A55}
+.pill.live i{width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;box-shadow:0 0 0 3px rgba(14,159,110,.18)}
+.pill.grey{background:var(--line2);color:var(--ink2)}
+.pill.blue{background:var(--blue-soft);color:var(--blue)}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px}
+.label{font-size:12px;color:var(--ink3);font-weight:500}
+.fb{display:flex;gap:14px;color:var(--ink3);margin-top:12px}
+.fb svg{width:16px;height:16px}
+
+/* composer */
+.composer{background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 2px 10px rgba(16,24,40,.05);padding:14px 14px 10px}
+.composer .ph{color:var(--ink3);font-size:14.5px;min-height:44px}
+.composer .row{display:flex;align-items:center;justify-content:space-between}
+.composer .upl{font-size:12.5px;color:var(--ink2);border:1px solid var(--line);border-radius:8px;padding:5px 10px;display:inline-flex;gap:6px;align-items:center}
+.send{width:32px;height:32px;border-radius:9px;background:var(--blue);color:#fff;display:grid;place-items:center}
+.send svg{width:16px;height:16px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:12.5px;color:var(--ink2);font-weight:500;display:inline-flex;gap:6px;align-items:center}
+.chip.hl{border-color:#C9D5FF;color:var(--blue);background:var(--blue-soft)}
+.chip.hl b{font-size:10px;background:var(--blue);color:#fff;border-radius:4px;padding:1px 5px;font-weight:600}
+
+/* ---------- Screen 1: Ray home ---------- */
+.home{max-width:860px;margin:0 auto;padding:44px 20px 40px}
+.hello{display:flex;align-items:center;gap:14px;margin-bottom:22px}
+.hello .clover{width:40px;height:40px}
+.hello h1{margin:0;font-size:28px;letter-spacing:-.02em;font-weight:700}
+.hello p{margin:2px 0 0;color:var(--ink2);font-size:15px}
+.home .chips{margin:14px 0 26px}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.kpi{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.kpi .v{font-size:24px;font-weight:700;letter-spacing:-.02em;margin:4px 0 2px}
+.kpi .d{font-size:12px;color:var(--ink3)}
+.kpi .d.up{color:var(--green);font-weight:600}
+.kpi .d.warn{color:var(--amber);font-weight:600}
+.insight{background:linear-gradient(180deg,#FFFFFF 0%,#FBFCFF 100%);border:1px solid #D9E1FF;border-radius:16px;padding:20px;box-shadow:0 0 0 4px rgba(48,94,255,.05)}
+.insight-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.insight h2{margin:0 0 6px;font-size:20px;letter-spacing:-.015em}
+.insight p{margin:0 0 16px;color:var(--ink2);font-size:14px;max-width:640px}
+.stack{display:flex;height:12px;border-radius:6px;overflow:hidden;margin-bottom:12px;gap:2px}
+.stack i{display:block;height:100%}
+.legend{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.legend div{font-size:12.5px;color:var(--ink2);border-left:3px solid;padding-left:9px}
+.legend b{display:block;color:var(--ink);font-size:14px}
+.legend .bad{color:var(--red);font-weight:600}
+.insight-foot{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;border-top:1px solid var(--line2);padding-top:14px}
+.insight-foot .muted{max-width:420px}
+
+/* ---------- Screen 2: plan chat ---------- */
+.thread{max-width:780px;margin:0 auto;padding:28px 20px 150px}
+.msg-user{margin-left:auto;max-width:520px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 16px;font-size:14.5px;box-shadow:0 1px 2px rgba(16,24,40,.04);width:fit-content}
+.msg-ray{margin-top:22px}
+.ray-line{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.ray-line .clover{width:18px;height:18px}
+.msg-ray h3{font-size:17px;margin:0 0 4px;letter-spacing:-.01em}
+.msg-ray > p{color:var(--ink2);margin:0 0 14px;font-size:14px}
+.plan{background:linear-gradient(135deg,#FFFFFF 55%,#F3F6FF 100%);border:1px solid var(--line);border-radius:14px;box-shadow:0 2px 12px rgba(16,24,40,.06);overflow:hidden}
+.plan-head{display:flex;justify-content:space-between;align-items:center;padding:16px 18px 6px}
+.plan-title{font-weight:700;font-size:15px}
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%}
+.plan table{min-width:560px}
+th{text-align:left;font-size:11.5px;font-weight:600;color:var(--ink3);padding:10px 18px;border-bottom:1px solid var(--line2);white-space:nowrap}
+td{padding:11px 18px;border-bottom:1px solid var(--line2);font-size:13.5px;vertical-align:middle}
+td span.sub{display:block;font-size:11.5px;color:var(--ink3);margin-top:1px}
+.offer{display:inline-block;font-size:12px;font-weight:600;border-radius:6px;padding:3px 8px;background:var(--blue-soft);color:var(--blue);white-space:nowrap}
+.offer.fs{background:var(--green-soft);color:#0B7A55}
+.offer.none{background:var(--line2);color:var(--ink2)}
+.totals{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-bottom:1px solid var(--line2)}
+.totals > div{padding:14px 18px;border-right:1px solid var(--line2)}
+.totals > div:last-child{border-right:0}
+.totals .v{font-size:20px;font-weight:700;letter-spacing:-.02em;margin-top:2px}
+.totals .s{font-size:11.5px;color:var(--ink3)}
+.guards{display:flex;flex-wrap:wrap;gap:8px;padding:14px 18px}
+.guard{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);background:#fff;border:1px solid var(--line);border-radius:8px;padding:5px 9px}
+.guard svg{width:13px;height:13px;color:var(--green)}
+.plan-actions{display:flex;align-items:center;gap:10px;padding:4px 18px 18px;flex-wrap:wrap}
+.plan-actions a{color:var(--blue);font-size:13px;font-weight:500;margin-left:auto;text-decoration:none}
+.approved{display:none;margin-top:22px}
+.approved.show{display:block}
+.done-card{background:#fff;border:1px solid #BFE8D6;border-radius:14px;padding:14px 16px;display:grid;gap:9px}
+.done-card div{display:flex;gap:10px;align-items:center;font-size:13.5px}
+.done-card svg{width:16px;height:16px;color:var(--green);flex:none}
+.dock{position:absolute;left:0;right:0;bottom:0;padding:14px 20px 18px;background:linear-gradient(180deg,rgba(245,246,248,0),var(--ray-bg) 35%)}
+.dock-in{max-width:780px;margin:0 auto}
+.dock .chips{margin-bottom:10px}
+.dock .composer{display:flex;align-items:center;gap:10px;padding:10px 10px 10px 16px}
+.dock .composer .ph{min-height:0;flex:1}
+.btn.done,.btn.done:hover{background:var(--green)}
+
+/* ---------- Screen 3: checkout ---------- */
+.frame.plain{background:#F1F2F5;padding:30px 24px 34px}
+.co-head{max-width:760px;margin:0 auto 26px;text-align:center}
+.co-head h2{font-size:24px;letter-spacing:-.02em;margin:10px 0 6px}
+.co-head p{color:var(--ink2);margin:0}
+.phones{display:flex;justify-content:center;gap:40px;flex-wrap:wrap}
+.pcol{width:310px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.who{font-size:13px;color:var(--ink2);display:flex;gap:8px;align-items:center}
+.who b{color:var(--ink)}
+.phone{width:300px;height:610px;border-radius:44px;background:#0B0B0D;padding:10px;box-shadow:0 20px 40px rgba(16,24,40,.22)}
+.screenp{width:100%;height:100%;border-radius:35px;overflow:hidden;background:#D9D6D2;position:relative;display:flex;flex-direction:column}
+.sbar{height:36px;display:flex;justify-content:space-between;align-items:center;padding:6px 24px 0;font-size:12px;font-weight:600;color:#1a1a1a;position:relative;z-index:2}
+.notch{position:absolute;left:50%;top:8px;transform:translateX(-50%);width:90px;height:24px;background:#0B0B0D;border-radius:14px}
+.store-bg{height:46px;padding:4px 16px;font-size:11px;color:#6b6460;display:flex;align-items:center;justify-content:space-between}
+.sheet{flex:1;background:#fff;border-radius:20px 20px 0 0;padding:12px 14px 10px;display:flex;flex-direction:column;gap:9px;font-size:12px}
+.grab{width:36px;height:4px;border-radius:2px;background:#D9DCE1;margin:0 auto 2px}
+.mtop{display:flex;align-items:center;gap:10px;padding-bottom:9px;border-bottom:1px solid var(--line2)}
+.mlogo{width:32px;height:32px;border-radius:9px;background:#7A2E3B;color:#F6E7D8;font-weight:700;display:grid;place-items:center;font-size:14px;font-family:Georgia,serif}
+.mname{font-weight:700;font-size:13px}
+.msub{font-size:11px;color:var(--ink3)}
+.mtotal{margin-left:auto;font-weight:700;font-size:14px}
+.obanner{display:flex;align-items:center;gap:8px;background:var(--green-soft);border:1px dashed #8FD3B5;color:#0B6E4D;border-radius:10px;padding:8px 10px;font-weight:600}
+.obanner svg{width:15px;height:15px;flex:none}
+.obanner span{margin-left:auto;font-weight:700;white-space:nowrap}
+.coupon-row{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line);border-radius:10px;padding:8px 10px;color:var(--ink2)}
+.coupon-row b{color:var(--blue);font-weight:600;font-size:11.5px}
+.sec{display:flex;justify-content:space-between;gap:10px}
+.sec .l{color:var(--ink3)}
+.sec .r{font-weight:500;text-align:right}
+.sum{background:#F8F9FB;border-radius:10px;padding:9px 10px;display:grid;gap:5px}
+.sum div{display:flex;justify-content:space-between}
+.sum s{color:var(--ink3);margin-right:5px}
+.sum .free{color:var(--green);font-weight:700}
+.sum .tot{border-top:1px solid var(--line);padding-top:6px;font-weight:700;font-size:13px}
+.popts{display:grid;gap:6px}
+.popt{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.popt .dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--line);flex:none}
+.popt.sel{border-color:var(--blue);background:#F6F8FF}
+.popt.sel .dot{border:4px solid var(--blue)}
+.popt em{font-style:normal;font-size:10px;font-weight:600;color:#0B7A55;background:var(--green-soft);border-radius:4px;padding:1px 5px;margin-left:auto}
+.paybtn{margin-top:auto;background:var(--blue);color:#fff;border:0;border-radius:10px;padding:11px;font-weight:700;font-size:13.5px;cursor:default}
+.sfoot{text-align:center;font-size:10px;color:var(--ink3);display:flex;gap:5px;justify-content:center;align-items:center}
+.sfoot svg{width:11px;height:11px}
+.why{width:100%;background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}
+.why .mono-tag{margin-bottom:8px}
+.why p{margin:0 0 8px;font-size:13px;color:var(--ink2)}
+.why .dec{display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line2);padding-top:9px;font-size:13px}
+.meter{display:grid;gap:5px;margin:8px 0 10px}
+.meter div{display:grid;grid-template-columns:86px 1fr 34px;align-items:center;gap:8px;font-size:11.5px;color:var(--ink2)}
+.meter i{display:block;height:8px;border-radius:4px;background:#D5DAE3}
+.meter i.g{background:var(--green)}
+.holdnote{max-width:700px;margin:26px auto 0;display:flex;gap:12px;align-items:flex-start;background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;font-size:13px;color:var(--ink2)}
+.holdnote svg{width:18px;height:18px;color:var(--blue);flex:none;margin-top:1px}
+
+/* ---------- Screen 4: results ---------- */
+.res{padding:22px 24px 28px;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px;max-width:1240px;margin:0 auto}
+.res-head{grid-column:1/-1;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.res-head h2{margin:0;font-size:22px;letter-spacing:-.02em;display:flex;align-items:center;gap:10px}
+.res-head h2 .clover{width:22px;height:22px}
+.res-head .sp{flex:1}
+.k4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.k4 .kpi .v{font-size:22px}
+.bar{height:6px;background:var(--line2);border-radius:3px;margin:8px 0 6px;position:relative;overflow:hidden}
+.bar i{position:absolute;left:0;top:0;bottom:0;background:var(--blue);border-radius:3px}
+.bar b{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink)}
+.panel{background:#fff;border:1px solid var(--line);border-radius:14px;margin-top:14px;overflow:hidden}
+.panel-h{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line2);gap:10px;flex-wrap:wrap}
+.panel-h h4{margin:0;font-size:14.5px}
+.proof{padding:14px 18px;display:grid;gap:14px}
+.prow{display:grid;grid-template-columns:170px 1fr 70px;gap:14px;align-items:center}
+.prow .nm{font-size:13px;font-weight:600}
+.prow .nm span{display:block;font-size:11.5px;color:var(--ink3);font-weight:400}
+.pbars{display:grid;gap:4px}
+.pbars div{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ink2)}
+.pbars i{display:block;height:10px;border-radius:5px}
+.pbars .a i{background:var(--blue)}
+.pbars .h i{background:#C7CDD8}
+.lift{font-weight:700;color:var(--green);text-align:right;font-size:14px}
+.leg{display:flex;gap:14px;font-size:11.5px;color:var(--ink3)}
+.leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.res table{min-width:620px}
+.res tr.why-row td{background:#F8F9FB;color:var(--ink2);font-size:12.5px;display:none}
+.res tr.why-row.show td{display:table-cell}
+.whyl{color:var(--blue);font-weight:500;font-size:12.5px;cursor:pointer;background:none;border:0;padding:0}
+.st{font-size:11.5px;font-weight:600;border-radius:6px;padding:2px 7px;white-space:nowrap}
+.st.ok{background:var(--green-soft);color:#0B7A55}
+.st.saving{background:var(--line2);color:var(--ink2)}
+.side{display:grid;gap:12px;align-content:start}
+.side .card{padding:14px 16px}
+.alert{border-color:var(--amber-line)!important;background:linear-gradient(180deg,#FFF9F0,#fff 60%)}
+.side h5{margin:8px 0 4px;font-size:14px}
+.side p{margin:0 0 10px;font-size:12.8px;color:var(--ink2)}
+.side .btns{display:flex;gap:8px;flex-wrap:wrap}
+.side .btn{padding:7px 12px;font-size:12.5px}
+.codebox{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:4px 0 12px}
+.codebox div{background:#fff;border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:11px;color:var(--ink3)}
+.codebox b{display:block;font-size:14px;color:var(--ink)}
+.wa{background:#EAE6DF;border-radius:10px;padding:10px;margin-top:6px}
+.wa-b{background:#fff;border-radius:8px 8px 8px 2px;padding:9px 10px;font-size:12.5px;color:#1f2a24;box-shadow:0 1px 1px rgba(0,0,0,.06)}
+.wa-b small{display:block;text-align:right;color:#8a8f8c;font-size:10px;margin-top:4px}
+.res .dock{grid-column:1/-1}
+
+/* ---------- Screen 5: Agent Studio ---------- */
+.studio{background:var(--st-bg);color:var(--st-ink);min-height:760px}
+.st-nav{display:flex;align-items:center;gap:22px;padding:16px 28px;border-bottom:1px solid var(--st-line)}
+.wordmark{font-weight:800;font-style:italic;font-size:19px;letter-spacing:-.02em;color:#fff;white-space:nowrap}
+.st-nav .lnk{display:flex;gap:20px;font-size:13px;color:var(--st-ink2);flex:1;overflow:hidden;white-space:nowrap}
+.st-nav .lnk .on{color:#fff}
+.st-nav .btn{padding:7px 14px;font-size:12.5px}
+.st-hero{display:grid;grid-template-columns:1.05fr 1fr;gap:36px;padding:52px 28px 40px;max-width:1200px;margin:0 auto;align-items:center}
+.st-label{font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--st-ink2);text-transform:uppercase}
+.st-label i{display:inline-block;width:7px;height:7px;background:var(--st-green);border-radius:50%;margin-right:8px;box-shadow:0 0 10px var(--st-green)}
+.st-hero h1{font-size:46px;line-height:1.05;letter-spacing:-.035em;margin:14px 0 14px;font-weight:700}
+.st-hero h1 em{font-style:normal;color:#7D9BFF}
+.st-hero p{color:var(--st-ink2);font-size:15.5px;margin:0 0 24px;max-width:500px}
+.st-hero .btns{display:flex;gap:10px;flex-wrap:wrap}
+.btn.dark{background:transparent;border-color:#2A313C;color:#fff}
+.feed{display:grid;gap:10px;position:relative}
+.feed::before{content:"";position:absolute;inset:-30px;background:radial-gradient(circle at 60% 40%,rgba(48,94,255,.22),transparent 60%);pointer-events:none}
+.fcard{position:relative;background:linear-gradient(180deg,var(--st-card2),var(--st-card));border:1px solid var(--st-line);border-radius:12px;padding:13px 15px}
+.fcard .t{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--st-ink2);display:flex;justify-content:space-between;text-transform:uppercase}
+.fcard .t b{color:var(--st-green);font-weight:600}
+.fcard .m{font-size:14px;margin-top:6px;color:var(--st-ink)}
+.fcard .m strong{color:#fff}
+.fcard.dim{opacity:.55}
+.st-sec{max-width:1200px;margin:0 auto;padding:26px 28px}
+.st-sec h3{font-size:24px;letter-spacing:-.02em;margin:8px 0 18px;font-weight:700}
+.how{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.how .fcard{padding:18px}
+.how .n{font-family:var(--mono);color:#7D9BFF;font-size:12px}
+.how h6{font-size:16px;margin:10px 0 6px;color:#fff}
+.how p{margin:0;color:var(--st-ink2);font-size:13px}
+.perm{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.perm div{display:flex;align-items:center;gap:10px;background:var(--st-card);border:1px solid var(--st-line);border-radius:10px;padding:10px 13px;font-size:13px;color:var(--st-ink)}
+.perm svg{width:16px;height:16px;flex:none}
+.perm .y svg{color:var(--st-green)}
+.perm .n2{color:var(--st-ink2)}
+.perm .n2 svg{color:#E5484D}
+.others{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.others .fcard .m{font-size:13px;color:var(--st-ink2)}
+.others .fcard.me{border-color:#2C47B8;box-shadow:0 0 0 1px #2C47B8 inset}
+.pricebar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;border:1px solid var(--st-line);border-radius:14px;padding:18px 20px;background:linear-gradient(90deg,#0D1324,#0B0E14)}
+.pricebar b{font-size:17px;color:#fff;display:block}
+.pricebar span{color:var(--st-ink2);font-size:13px}
+
+.foot{max-width:1280px;margin:0 auto;padding:0 16px 30px;font-size:11.5px;color:var(--ink3)}
+
+/* ---------- responsive ---------- */
+@media (max-width:1000px){
+  .res{grid-template-columns:minmax(0,1fr)}
+  .k4{grid-template-columns:repeat(2,1fr)}
+  .st-hero{grid-template-columns:1fr}
+  .others{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:720px){
+  .ray-search{display:none}
+  .ray-nav{padding:0 12px}
+  .nav-item:not(.active){display:none}
+  .nav-item.more{display:flex}
+  .kpis{grid-template-columns:1fr}
+  .legend{grid-template-columns:1fr}
+  .totals{grid-template-columns:repeat(2,1fr)}
+  .totals > div:nth-child(2){border-right:0}
+  .totals > div:nth-child(-n+2){border-bottom:1px solid var(--line2)}
+  .how,.perm,.others{grid-template-columns:1fr}
+  .st-hero h1{font-size:34px}
+  .st-nav .lnk{display:none}
+  .prow{grid-template-columns:1fr 56px}
+  .prow .pbars{grid-column:1/-1;grid-row:2}
+  .home,.thread{padding-left:14px;padding-right:14px}
+  .res{padding:18px 14px 24px}
+  .k4 .kpi .v{font-size:19px}
+  .k4{gap:8px}
+  .kpi{padding:12px}
+  .frame.plain{padding:24px 12px}
+  .hello h1{font-size:24px}
+  .plan table{min-width:0}
+  .plan th:nth-child(2),.plan td:nth-child(2){display:none}
+  .plan th,.plan td{padding-left:14px;padding-right:12px}
+  .thread{padding-bottom:16px}
+  #s-plan .dock{position:static;padding:0 14px 16px;background:none}
+}
+</style>
+</head>
+<body>
+
+<div class="proto">
+  <div class="proto-in">
+    <div class="proto-title">Smart Offers · design samples</div>
+    <div class="proto-note">DESIGN REFERENCE ONLY: layout, components and style. Numbers and the store name (Kaari Studio) are from an older demo; the build must use Alpha Apparel numbers produced by the engine.</div>
+    <nav class="tabs" id="tabs">
+      <button data-s="home" class="on"><span>1</span>Ray home</button>
+      <button data-s="plan"><span>2</span>Set up plan</button>
+      <button data-s="checkout"><span>3</span>Checkout</button>
+      <button data-s="results"><span>4</span>Results</button>
+      <button data-s="studio"><span>5</span>Agent Studio</button>
+    </nav>
+  </div>
+</div>
+
+<!-- reusable icons -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-clover" viewBox="0 0 24 24"><g fill="currentColor"><rect x="2.5" y="2.5" width="9" height="9" rx="4.5"/><rect x="12.5" y="2.5" width="9" height="9" rx="4.5"/><rect x="2.5" y="12.5" width="9" height="9" rx="4.5"/><rect x="12.5" y="12.5" width="9" height="9" rx="4.5"/></g></symbol>
+    <symbol id="i-card" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 10h18M7 15h4"/></symbol>
+    <symbol id="i-bank" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20h16M6 17V10M10 17V10M14 17V10M18 17V10M3 9l9-5 9 5z"/></symbol>
+    <symbol id="i-people" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c.8-3.2 3.2-5 6-5s5.2 1.8 6 5"/><path d="M16 5.5a3 3 0 010 5.6M18 14.3c1.5.7 2.6 2.2 3 4.7"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-checkc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.8 2.8L16.3 9.5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l7 3v5.5c0 4.3-3 7.9-7 9.5-4-1.6-7-5.2-7-9.5V6z"/><path d="M9 12l2.2 2.2L15.5 10"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8" r="1.5"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-thumb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 11v9H4v-9zM7 11l4-7c1.5 0 2.5 1 2.2 2.6L12.6 10H19a2 2 0 012 2.3l-1.2 6A2 2 0 0117.8 20H7"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 00-1-1H5a1 1 0 00-1 1v10a1 1 0 001 1h3"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.2 10.8l7.6-3.6M8.2 13.2l7.6 3.6"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M10 9v6M14 9v6"/></symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="9" r="3.5"/><path d="M3 20c.6-3.5 3-5.5 6-5.5s5.4 2 6 5.5M16 6.5a3 3 0 010 5.6M18.5 15c1.3.9 2.2 2.6 2.5 5"/></symbol>
+  </defs>
+</svg>
+
+<main>
+
+<!-- ================= 1. RAY HOME ================= -->
+<section class="screen on" id="s-home">
+  <p class="caption"><span class="step">SCREEN 1</span> Ray home. Ray spots wasted discount spend and proposes Smart Offers, without being asked.</p>
+  <div class="frame">
+    <header class="ray-nav">
+      <div class="items">
+        <span class="nav-item active"><svg><use href="#i-clover"/></svg>Ray AI</span>
+        <span class="nav-item"><svg><use href="#i-card"/></svg>Payments</span>
+        <span class="nav-item"><svg><use href="#i-bank"/></svg>Banking+</span>
+        <span class="nav-item"><svg><use href="#i-people"/></svg>Payroll</span>
+        <span class="nav-item more">More <svg style="width:13px;height:13px"><use href="#i-down"/></svg></span>
+      </div>
+      <div class="ray-search"><svg><use href="#i-search"/></svg>Search in payments</div>
+      <div class="avatar">AK</div>
+    </header>
+
+    <div class="home">
+      <div class="hello">
+        <span class="clover"><svg><use href="#i-clover"/></svg></span>
+        <div><h1>Hello, Arjun</h1><p>What can I do for you today?</p></div>
+      </div>
+
+      <div class="composer">
+        <div class="ph">Ask Ray about payments, settlements or offers…</div>
+        <div class="row">
+          <span class="upl"><svg style="width:13px;height:13px"><use href="#i-plus"/></svg>Upload file</span>
+          <span class="send"><svg><use href="#i-up"/></svg></span>
+        </div>
+      </div>
+      <div class="chips">
+        <span class="chip">Payments</span><span class="chip">Settlements</span>
+        <span class="chip hl"><svg style="width:13px;height:13px"><use href="#i-tag"/></svg>Offers &amp; coupons <b>NEW</b></span>
+        <span class="chip">Manage account</span><span class="chip">Support</span>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi"><div class="label">Collected payments · this week</div><div class="v">₹6.1L</div><div class="d up">▲ 8% from last week</div></div>
+        <div class="kpi"><div class="label">Checkout conversion · Sep</div><div class="v">37.3%</div><div class="d">1,921 orders from 5,150 checkouts</div></div>
+        <div class="kpi"><div class="label">Discounts given · Sep</div><div class="v">₹2.58L</div><div class="d warn">9.9% of sales</div></div>
+      </div>
+
+      <div class="insight">
+        <div class="insight-head"><span class="mono-tag amber">Ray insight · Offers</span><span class="muted small">Updated today</span></div>
+        <h2>WELCOME10 cost you ₹75,600 in profit last month</h2>
+        <p>It cost <b>₹2.58L</b> and brought about <b>₹4.55L</b> of sales you wouldn't have got anyway. That's a <b>1.8x</b> return. At your 40% margin you need <b>2.5x</b> just to break even.</p>
+        <div class="label" style="margin-bottom:6px">Where the ₹2.58L went</div>
+        <div class="stack"><i style="width:47.5%;background:#305EFF"></i><i style="width:41.3%;background:#E5484D"></i><i style="width:11.2%;background:#8B5CF6"></i></div>
+        <div class="legend">
+          <div style="border-color:#305EFF"><b>₹1.23L · New shoppers</b>2.7x return</div>
+          <div style="border-color:#E5484D"><b>₹1.07L · Returning</b><span class="bad">0.5x</span> · would have bought anyway</div>
+          <div style="border-color:#8B5CF6"><b>₹28,800 · Lapsed</b>2.6x return</div>
+        </div>
+        <div class="insight-foot">
+          <span class="muted small">Estimated from 180 similar fashion stores on Magic Checkout. Smart Offers then measures your own store with a 10% holdout.</span>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn ghost">How do you know?</button>
+            <button class="btn primary" data-go="plan">Fix with Smart Offers</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 2. PLAN CHAT ================= -->
+<section class="screen" id="s-plan">
+  <p class="caption"><span class="step">SCREEN 2</span> The merchant states a budget, a target and a rule in plain words. Ray returns a plan card to approve.</p>
+  <div class="frame">
+    <header class="ray-nav">
+      <div class="items">
+        <span class="nav-item active"><svg><use href="#i-clover"/></svg>Ray AI</span>
+        <span class="nav-item"><svg><use href="#i-card"/></svg>Payments</span>
+        <span class="nav-item"><svg><use href="#i-bank"/></svg>Banking+</span>
+        <span class="nav-item"><svg><use href="#i-people"/></svg>Payroll</span>
+        <span class="nav-item more">More <svg style="width:13px;height:13px"><use href="#i-down"/></svg></span>
+      </div>
+      <div class="ray-search"><svg><use href="#i-search"/></svg>Search in payments</div>
+      <div class="avatar">AK</div>
+    </header>
+
+    <div class="thread">
+      <div class="msg-user">I have ₹1 lakh a month for offers. I want at least 3x back. Keep the new festive drop at full price for the first 7 days.</div>
+
+      <div class="msg-ray">
+        <div class="ray-line"><span class="clover"><svg><use href="#i-clover"/></svg></span><span class="muted small">Ray · Smart Offers agent</span></div>
+        <h3>Here's a plan that returns 3.1x on ₹95,900</h3>
+        <p>I checked each offer for each shopper group against 180 similar fashion stores. Returning shoppers buy without a coupon, so they get none. That alone stops ₹1.07L a month going to people who'd buy anyway.</p>
+
+        <div class="plan">
+          <div class="plan-head">
+            <div><div class="label">Smart Offers plan</div><div class="plan-title">Kaari Studio · October</div></div>
+            <span class="pill grey" id="planState">Draft</span>
+          </div>
+          <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Shopper group</th><th>Buys without offer</th><th>Offer</th><th>Return</th></tr></thead>
+            <tbody>
+              <tr><td><b>New · cart under ₹1,500</b><span class="sub">Mostly first visits from Instagram · 2,400/mo</span></td><td>27 in 100</td><td><span class="offer fs">Free shipping</span></td><td class="good"><b>3.1x</b></td></tr>
+              <tr><td><b>New · cart ₹1,500+</b><span class="sub">700/mo</span></td><td>31 in 100</td><td><span class="offer">₹100 off</span></td><td class="good"><b>3.2x</b></td></tr>
+              <tr><td><b>Returning</b><span class="sub">Ordered in last 120 days · 1,550/mo</span></td><td>56–60 in 100</td><td><span class="offer none">No offer</span></td><td class="muted small">best option 0.8x</td></tr>
+              <tr><td><b>Lapsed</b><span class="sub">No order in 120+ days · 500/mo</span></td><td>34 in 100</td><td><span class="offer">₹100 off</span></td><td class="good"><b>3.1x</b></td></tr>
+            </tbody>
+          </table>
+          </div>
+          <div class="totals">
+            <div><div class="label">Offer spend</div><div class="v">₹95,900</div><div class="s">of ₹1,00,000 budget</div></div>
+            <div><div class="label">Extra sales</div><div class="v">₹2.98L</div><div class="s">254 extra orders</div></div>
+            <div><div class="label">Return</div><div class="v good">3.1x</div><div class="s">likely 2.2x – 3.8x</div></div>
+            <div><div class="label">Profit from offers</div><div class="v good">+₹23,500</div><div class="s">today: <span style="white-space:nowrap">−₹75,600</span></div></div>
+          </div>
+          <div class="guards">
+            <span class="guard"><svg><use href="#i-shield"/></svg>1 in 10 shoppers sees no offer, to prove the lift</span>
+            <span class="guard"><svg><use href="#i-cal"/></svg>Festive drop: full price for 7 days</span>
+            <span class="guard"><svg><use href="#i-users"/></svg>Same offer for everyone in a group</span>
+            <span class="guard"><svg><use href="#i-pause"/></svg>Auto-pause below 2.5x for 7 days</span>
+            <span class="guard"><svg><use href="#i-lock"/></svg>Never uses device, gender or income</span>
+          </div>
+          <div class="plan-actions">
+            <button class="btn primary" id="approveBtn"><svg><use href="#i-check"/></svg>Approve &amp; go live</button>
+            <button class="btn secondary">Edit plan</button>
+            <a href="#" onclick="return false">Try ₹200 off on big new carts →</a>
+          </div>
+        </div>
+        <div class="fb"><svg><use href="#i-thumb"/></svg><svg style="transform:scaleY(-1)"><use href="#i-thumb"/></svg><svg><use href="#i-copy"/></svg><svg><use href="#i-share"/></svg></div>
+      </div>
+
+      <div class="msg-ray approved" id="approved">
+        <div class="ray-line"><span class="clover"><svg><use href="#i-clover"/></svg></span><span class="muted small">Ray · Smart Offers agent</span></div>
+        <h3>Smart Offers is live on your Magic Checkout</h3>
+        <p style="color:var(--ink2);margin:0 0 12px">Here's what changed. Your free pilot runs for 30 days.</p>
+        <div class="done-card">
+          <div><svg><use href="#i-checkc"/></svg>WELCOME10 paused for returning shoppers</div>
+          <div><svg><use href="#i-checkc"/></svg>3 offers live for new and lapsed shoppers, capped at ₹1,00,000</div>
+          <div><svg><use href="#i-checkc"/></svg>Holdout group of 10% set up</div>
+          <div><svg><use href="#i-checkc"/></svg>Weekly report on WhatsApp every Monday</div>
+        </div>
+        <div style="margin-top:12px"><button class="btn secondary" data-go="checkout">See what shoppers see →</button></div>
+      </div>
+    </div>
+
+    <div class="dock">
+      <div class="dock-in">
+        <div class="chips"><span class="chip">Why no offer for returning shoppers?</span><span class="chip">What if my budget is ₹1.5L?</span><span class="chip">Show me the holdout</span></div>
+        <div class="composer"><div class="ph">Ask Ray…</div><span class="send"><svg><use href="#i-up"/></svg></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 3. CHECKOUT ================= -->
+<section class="screen" id="s-checkout">
+  <p class="caption"><span class="step">SCREEN 3</span> The shopper side. Magic Checkout shows the offer the engine picked. There's no AI call at checkout, just a lookup.</p>
+  <div class="frame plain">
+    <div class="co-head">
+      <span class="mono-tag">Magic Checkout · shopper view</span>
+      <h2>Same kurta, two shoppers, two decisions</h2>
+      <p>The engine shows each group the cheapest offer that changes the decision. If nothing changes it, the shopper sees no offer.</p>
+    </div>
+
+    <div class="phones">
+      <!-- Priya -->
+      <div class="pcol">
+        <div class="who"><b>Priya</b> · first visit, from an Instagram ad</div>
+        <div class="phone"><div class="screenp">
+          <div class="notch"></div>
+          <div class="sbar"><span>9:41</span><span>5G ▮</span></div>
+          <div class="store-bg"><span>kaaristudio.in</span><span>✕</span></div>
+          <div class="sheet">
+            <div class="grab"></div>
+            <div class="mtop"><div class="mlogo">K</div><div><div class="mname">Kaari Studio</div><div class="msub">1 item</div></div><div class="mtotal">₹890</div></div>
+            <div class="obanner"><svg><use href="#i-checkc"/></svg>Free shipping, first order<span>−₹70</span></div>
+            <div class="sec"><span class="l">Contact</span><span class="r">+91 98••• ••210</span></div>
+            <div class="sec"><span class="l">Deliver to</span><span class="r">Home · Indiranagar, Bengaluru</span></div>
+            <div class="sum">
+              <div><span>Mulmul cotton kurta</span><span>₹890</span></div>
+              <div><span>Shipping</span><span><s>₹70</s><span class="free">FREE</span></span></div>
+              <div class="tot"><span>To pay</span><span>₹890</span></div>
+            </div>
+            <div class="popts">
+              <div class="popt sel"><span class="dot"></span>UPI<em>Recommended</em></div>
+              <div class="popt"><span class="dot"></span>Cards</div>
+              <div class="popt"><span class="dot"></span>Cash on delivery</div>
+            </div>
+            <button class="paybtn" tabindex="-1">Pay ₹890</button>
+            <div class="sfoot"><svg><use href="#i-lock"/></svg>Magic Checkout · prototype</div>
+          </div>
+        </div></div>
+        <div class="why">
+          <span class="mono-tag green">Why this offer</span>
+          <p><b>New shopper, cart under ₹1,500.</b> Free shipping is the cheapest offer that moves this group.</p>
+          <div class="meter">
+            <div><span>No offer</span><i style="width:38.6%"></i><span>27%</span></div>
+            <div><span>Free shipping</span><i class="g" style="width:50%"></i><span>35%</span></div>
+          </div>
+          <div class="dec"><span>Costs ₹70 per order</span><b class="good">3.1x return</b></div>
+        </div>
+      </div>
+
+      <!-- Ananya -->
+      <div class="pcol">
+        <div class="who"><b>Ananya</b> · returning, last order 41 days ago</div>
+        <div class="phone"><div class="screenp">
+          <div class="notch"></div>
+          <div class="sbar"><span>9:41</span><span>5G ▮</span></div>
+          <div class="store-bg"><span>kaaristudio.in</span><span>✕</span></div>
+          <div class="sheet">
+            <div class="grab"></div>
+            <div class="mtop"><div class="mlogo">K</div><div><div class="mname">Kaari Studio</div><div class="msub">1 item</div></div><div class="mtotal">₹960</div></div>
+            <div class="coupon-row"><span>Have a coupon code?</span><b>Apply</b></div>
+            <div class="sec"><span class="l">Contact</span><span class="r">+91 99••• ••034</span></div>
+            <div class="sec"><span class="l">Deliver to</span><span class="r">Work · Andheri East, Mumbai</span></div>
+            <div class="sum">
+              <div><span>Mulmul cotton kurta</span><span>₹890</span></div>
+              <div><span>Shipping</span><span>₹70</span></div>
+              <div class="tot"><span>To pay</span><span>₹960</span></div>
+            </div>
+            <div class="popts">
+              <div class="popt sel"><span class="dot"></span>UPI · saved<em>1-tap</em></div>
+              <div class="popt"><span class="dot"></span>Cards</div>
+              <div class="popt"><span class="dot"></span>Cash on delivery</div>
+            </div>
+            <button class="paybtn" tabindex="-1">Pay ₹960</button>
+            <div class="sfoot"><svg><use href="#i-lock"/></svg>Magic Checkout · prototype</div>
+          </div>
+        </div></div>
+        <div class="why">
+          <span class="mono-tag">Why no offer</span>
+          <p><b>Returning shopper.</b> More than half of this group buys anyway, so an offer mostly pays for sales you'd already get.</p>
+          <div class="meter">
+            <div><span>No offer</span><i style="width:80%"></i><span>56%</span></div>
+            <div><span>Free shipping</span><i class="g" style="width:82.9%;opacity:.45"></i><span>58%</span></div>
+          </div>
+          <div class="dec"><span>Best offer would return</span><b style="color:var(--red)">0.5x → skip</b></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="holdnote">
+      <svg><use href="#i-info"/></svg>
+      <div><b style="color:var(--ink)">1 in 10 shoppers in every group is held out and sees no offer.</b> Comparing them with everyone else is how Ray proves what the offers actually added. The rule is the same for everyone in a group, and it never uses device, gender or income.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 4. RESULTS ================= -->
+<section class="screen" id="s-results">
+  <p class="caption"><span class="step">SCREEN 4</span> Results, measured against the holdout. Ray flags a leaking creator code and keeps the festive-drop rule.</p>
+  <div class="frame">
+    <header class="ray-nav">
+      <div class="items">
+        <span class="nav-item active"><svg><use href="#i-clover"/></svg>Ray AI</span>
+        <span class="nav-item"><svg><use href="#i-card"/></svg>Payments</span>
+        <span class="nav-item"><svg><use href="#i-bank"/></svg>Banking+</span>
+        <span class="nav-item"><svg><use href="#i-people"/></svg>Payroll</span>
+        <span class="nav-item more">More <svg style="width:13px;height:13px"><use href="#i-down"/></svg></span>
+      </div>
+      <div class="ray-search"><svg><use href="#i-search"/></svg>Search in payments</div>
+      <div class="avatar">AK</div>
+    </header>
+
+    <div class="res">
+      <div class="res-head">
+        <h2><span class="clover"><svg><use href="#i-clover"/></svg></span>Smart Offers</h2>
+        <span class="pill live"><i></i>Live · day 20 of 30</span>
+        <span class="pill blue">Free pilot</span>
+        <span class="sp"></span>
+        <button class="btn secondary"><svg><use href="#i-pause"/></svg>Pause all</button>
+        <button class="btn secondary">Edit plan</button>
+      </div>
+
+      <div>
+        <div class="k4">
+          <div class="kpi"><div class="label">Offer spend</div><div class="v">₹65,100</div>
+            <div class="bar"><i style="width:65.1%"></i><b style="left:63.9%"></b></div>
+            <div class="d">of ₹1,00,000 · on pace</div></div>
+          <div class="kpi"><div class="label">Extra sales vs holdout</div><div class="v">₹2.19L</div><div class="d">184 extra orders (147–220)</div></div>
+          <div class="kpi"><div class="label">Return</div><div class="v good">3.4x</div><div class="d">target 3x · likely 2.7x – 4.0x</div></div>
+          <div class="kpi"><div class="label">Profit from offers</div><div class="v good">+₹22,600</div><div class="d">WELCOME10: <span style="white-space:nowrap">−₹50,400</span></div></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-h">
+            <h4>Proof: buying rate with offer vs holdout</h4>
+            <div class="leg"><span><i style="background:var(--blue)"></i>Got the offer</span><span><i style="background:#C7CDD8"></i>Holdout, no offer</span></div>
+          </div>
+          <div class="proof">
+            <div class="prow"><div class="nm">New · under ₹1,500<span>Free shipping</span></div>
+              <div class="pbars"><div class="a"><i style="width:71%"></i>35.5%</div><div class="h"><i style="width:54%"></i>27.0%</div></div><div class="lift">+8.5 pts</div></div>
+            <div class="prow"><div class="nm">New · ₹1,500+<span>₹100 off</span></div>
+              <div class="pbars"><div class="a"><i style="width:74%"></i>37.0%</div><div class="h"><i style="width:62%"></i>31.0%</div></div><div class="lift">+6.0 pts</div></div>
+            <div class="prow"><div class="nm">Lapsed<span>₹100 off</span></div>
+              <div class="pbars"><div class="a"><i style="width:92%"></i>46.0%</div><div class="h"><i style="width:68%"></i>34.0%</div></div><div class="lift">+12.0 pts</div></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-h"><h4>By shopper group</h4><span class="muted small">Tap "Why?" for Ray's reasoning</span></div>
+          <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Group</th><th>Offer</th><th>Spend</th><th>Extra sales</th><th>Return</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              <tr><td><b>New · under ₹1,500</b></td><td><span class="offer fs">Free shipping</span></td><td>₹35,800</td><td>₹1.16L</td><td class="good"><b>3.2x</b></td><td><span class="st ok">On target</span></td><td><button class="whyl" data-why="w1">Why?</button></td></tr>
+              <tr class="why-row" id="w1"><td colspan="7">Biggest group, mostly first visits from Instagram. Free shipping (₹70) moves 8.5 more shoppers in 100 to buy. ₹100 off moved slightly more but cost more per order, so free shipping wins on return.</td></tr>
+              <tr><td><b>New · ₹1,500+</b></td><td><span class="offer">₹100 off</span></td><td>₹15,500</td><td>₹58,000</td><td class="good"><b>3.7x</b></td><td><span class="st ok">Above target</span></td><td><button class="whyl" data-why="w2">Why?</button></td></tr>
+              <tr class="why-row" id="w2"><td colspan="7">Big carts respond to a flat ₹100 off more than to free shipping. ₹200 off would bring a few more orders at a lower return. Ray will suggest it if you raise the budget.</td></tr>
+              <tr><td><b>Lapsed</b></td><td><span class="offer">₹100 off</span></td><td>₹13,800</td><td>₹45,000</td><td class="good"><b>3.3x</b></td><td><span class="st ok">On target</span></td><td><button class="whyl" data-why="w3">Why?</button></td></tr>
+              <tr class="why-row" id="w3"><td colspan="7">Shoppers who haven't ordered in 120+ days need a real reason to come back. ₹100 off lifts buying by 12 in 100. Free shipping only returned 2.3x for this group.</td></tr>
+              <tr><td><b>Returning</b></td><td><span class="offer none">No offer</span></td><td>₹0</td><td>—</td><td class="muted">—</td><td><span class="st saving">₹71,100 not given away</span></td><td><button class="whyl" data-why="w4">Why?</button></td></tr>
+              <tr class="why-row" id="w4"><td colspan="7">56–60 in 100 returning shoppers buy without any offer. Under WELCOME10 they would have received about ₹71,100 so far this month for orders you'd have got anyway.</td></tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="side">
+        <div class="card alert">
+          <span class="mono-tag amber">Needs your call</span>
+          <h5>Creator code MEERA15 is leaking</h5>
+          <p>68% of its uses in the last 30 days came from returning buyers. That's ₹48,600 of discount on orders you'd likely have got anyway.</p>
+          <div class="codebox">
+            <div><b>400</b>uses</div>
+            <div><b>270</b>by returning buyers</div>
+            <div><b>₹72,000</b>total discount</div>
+            <div><b style="color:var(--red)">₹48,600</b>to returning buyers</div>
+          </div>
+          <div class="btns"><button class="btn primary">Limit to first orders</button><button class="btn secondary">Keep as is</button></div>
+        </div>
+
+        <div class="card">
+          <span class="mono-tag">Guardrail · upcoming</span>
+          <h5>Festive drop goes live Friday</h5>
+          <p>24 new styles will stay at full price for 7 days, as you asked. Offers keep running on older collections.</p>
+        </div>
+
+        <div class="card">
+          <span class="mono-tag green">Sent Monday · WhatsApp</span>
+          <div class="wa"><div class="wa-b">Smart Offers, last 7 days: spent <b>₹22,800</b>, extra sales <b>₹76,700</b> (3.4x). Best group: new shoppers with big carts (3.7x). Nothing paused. Reply PAUSE to stop all offers.<small>9:00 AM</small></div></div>
+        </div>
+
+        <div class="card">
+          <span class="mono-tag">Billing</span>
+          <h5>Free pilot · 10 days left</h5>
+          <p style="margin:0">After the pilot you pay only on proven extra profit, measured against the holdout.</p>
+        </div>
+      </div>
+
+      <div class="dock" style="position:static;padding:4px 0 0;background:none">
+        <div class="dock-in" style="max-width:none">
+          <div class="chips"><span class="chip">Why is lapsed lower than big carts?</span><span class="chip">Raise budget to ₹1.3L</span><span class="chip">Show creator code report</span></div>
+          <div class="composer"><div class="ph">Ask Ray about Smart Offers…</div><span class="send"><svg><use href="#i-up"/></svg></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 5. AGENT STUDIO ================= -->
+<section class="screen" id="s-studio">
+  <p class="caption"><span class="step">SCREEN 5</span> Agent Studio listing. Smart Offers sits next to Razorpay's existing recovery agents as the "decide and prove" agent.</p>
+  <div class="frame studio">
+    <div class="st-nav">
+      <span class="wordmark">Agent Studio</span>
+      <div class="lnk"><span class="on">Growth agents</span><span>Agentic Stack</span><span>Payments</span><span>Banking+</span><span>Payroll</span><span>Engage</span><span>Pricing</span></div>
+      <button class="btn dark">Log in</button>
+    </div>
+
+    <div class="st-hero">
+      <div>
+        <div class="st-label"><i></i>Agent Studio / Growth agents</div>
+        <h1>Smart Offers Agent.<br><em>Pay for the sale, not the coupon.</em></h1>
+        <p>Shows each shopper group the cheapest offer that changes the decision, or none at all. Every rupee is checked against a holdout, so you only pay for sales the offer actually caused.</p>
+        <div class="btns"><button class="btn primary" data-go="home">Add to Ray</button><button class="btn dark">See how it decides</button></div>
+      </div>
+      <div class="feed">
+        <div class="fcard"><div class="t"><span>Smart Offers agent</span><b>● Live</b></div><div class="m">Free shipping for new shoppers under ₹1,500: <strong>3.2x return</strong></div></div>
+        <div class="fcard"><div class="t"><span>Smart Offers agent</span><b>● Live</b></div><div class="m">Stopped WELCOME10 for returning buyers: <strong>₹71,100 kept</strong> this month</div></div>
+        <div class="fcard"><div class="t"><span>Creator code check</span><b>● Flagged</b></div><div class="m">MEERA15: 68% used by returning buyers. <strong>Suggest: first orders only</strong></div></div>
+        <div class="fcard dim"><div class="t"><span>Guardrail</span><b>● Scheduled</b></div><div class="m">Festive drop: 24 styles at full price for 7 days</div></div>
+      </div>
+    </div>
+
+    <div class="st-sec">
+      <div class="st-label">How it works</div>
+      <h3>Three steps, every week</h3>
+      <div class="how">
+        <div class="fcard"><div class="n">01 / FIND</div><h6>Spot wasted offers</h6><p>Reads your coupons and orders, and finds discounts that went to shoppers who'd buy anyway.</p></div>
+        <div class="fcard"><div class="n">02 / DECIDE</div><h6>Pick the cheapest offer that works</h6><p>Starts from 180 similar stores, then switches to your own results. No offer when none pays back.</p></div>
+        <div class="fcard"><div class="n">03 / PROVE</div><h6>Measure against a holdout</h6><p>1 in 10 shoppers sees no offer. The difference is the real lift, and it's what you pay on.</p></div>
+      </div>
+    </div>
+
+    <div class="st-sec">
+      <div class="st-label">What the agent can and can't do</div>
+      <h3>You stay in control</h3>
+      <div class="perm">
+        <div class="y"><svg><use href="#i-checkc"/></svg>Read checkout, order and coupon data</div>
+        <div class="y"><svg><use href="#i-checkc"/></svg>Run approved offers on Magic Checkout, within budget</div>
+        <div class="y"><svg><use href="#i-checkc"/></svg>Simulate plans before you approve</div>
+        <div class="y"><svg><use href="#i-checkc"/></svg>Pause an offer that drops below your break-even</div>
+        <div class="n2"><svg><use href="#i-x"/></svg>Change product prices</div>
+        <div class="n2"><svg><use href="#i-x"/></svg>Go over your budget or launch offers without approval</div>
+      </div>
+    </div>
+
+    <div class="st-sec">
+      <div class="st-label">Works alongside</div>
+      <h3>Recovery agents bring shoppers back. Smart Offers decides what to offer them.</h3>
+      <div class="others">
+        <div class="fcard"><div class="t"><span>Cart abandonment</span></div><div class="m">WhatsApp follow-ups on dropped carts</div></div>
+        <div class="fcard"><div class="t"><span>Dispute responder</span></div><div class="m">Fights chargebacks with evidence</div></div>
+        <div class="fcard"><div class="t"><span>Subscription recovery</span></div><div class="m">Recovers failed renewals</div></div>
+        <div class="fcard me"><div class="t"><span>Smart Offers</span><b>New</b></div><div class="m" style="color:#fff">Right offer, or none, with proof</div></div>
+      </div>
+    </div>
+
+    <div class="st-sec" style="padding-bottom:44px">
+      <div class="pricebar">
+        <div><b>Free 30-day pilot</b><span>After that, pay only on proven extra profit. No lift, no fee.</span></div>
+        <button class="btn primary" data-go="home">Start pilot</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+<p class="foot">Concept prototype by Praveen for the Razorpay × ISB Build Challenge 2026. All merchant, shopper and creator names and numbers are dummy data. Layout inspired by Razorpay's public Agentic Dashboard and Agent Studio pages.</p>
+
+<script>
+(function(){
+  var ids=['home','plan','checkout','results','studio'];
+  function show(id){
+    if(ids.indexOf(id)<0) id='home';
+    ids.forEach(function(s){document.getElementById('s-'+s).classList.toggle('on',s===id)});
+    document.querySelectorAll('#tabs button').forEach(function(b){b.classList.toggle('on',b.dataset.s===id)});
+    if(location.hash!=='#'+id){history.replaceState(null,'','#'+id)}
+    window.scrollTo(0,0);
+  }
+  document.querySelectorAll('#tabs button').forEach(function(b){b.addEventListener('click',function(){show(b.dataset.s)})});
+  document.querySelectorAll('[data-go]').forEach(function(b){b.addEventListener('click',function(){show(b.dataset.go)})});
+  window.addEventListener('hashchange',function(){show(location.hash.slice(1))});
+  show(location.hash.slice(1)||'home');
+
+  var ap=document.getElementById('approveBtn');
+  ap.addEventListener('click',function(){
+    ap.classList.add('done');ap.innerHTML='<svg><use href="#i-check"/></svg>Approved';
+    var st=document.getElementById('planState');st.className='pill live';st.innerHTML='<i></i>Live';
+    var a=document.getElementById('approved');a.classList.add('show');
+    a.scrollIntoView({behavior:'smooth',block:'center'});
+  });
+  document.querySelectorAll('.whyl').forEach(function(b){b.addEventListener('click',function(){
+    document.getElementById(b.dataset.why).classList.toggle('show');
+  })});
+})();
+</script>
+</body>
+</html>

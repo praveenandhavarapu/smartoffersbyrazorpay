@@ -1,0 +1,14 @@
+{
+  "currency": "INR",
+  "ladder": [
+    { "id": "none",          "label": "No offer",       "cost_per_order_inr": 0 },
+    { "id": "free_shipping", "label": "Free shipping",  "cost_per_order_inr": 79,  "eligible_if": "cart_value < 1500" },
+    { "id": "flat_100",      "label": "₹100 off",       "cost_per_order_inr": 100, "eligible_if": "cart_value >= 999" },
+    { "id": "flat_200",      "label": "₹200 off",       "cost_per_order_inr": 200, "eligible_if": "cart_value >= 1500" }
+  ],
+  "existing_codes": [
+    { "code": "ALPHA10", "type": "percent", "value": 10, "max_discount_inr": 200, "where": "site popup for everyone; also listed on coupon sites" },
+    { "code": "<CREATOR>15", "type": "percent", "value": 15, "max_discount_inr": 250, "where": "12 creator codes, see creator_codes.json" }
+  ],
+  "rules": { "one_offer_per_order": true, "max_discount_per_order_inr": 250, "daily_spend_cap_inr": 6000 }
+}

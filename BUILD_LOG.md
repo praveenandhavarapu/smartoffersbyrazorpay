@@ -1,0 +1,48 @@
+# AI Build Log — Smart Offers
+
+How AI tools were used, what they did, how they sped up the work, and where I made the decisions myself. Entries are newest last. Edit freely; this is my log.
+
+## Tools
+- **Claude (claude.ai, with research, docs and code tools):** problem research, Razorpay product research, stress tests, numbers modelled in Python, PRD, critique, build plan, design samples, this build spec.
+- **Claude Code (cloud sessions on GitHub):** the working prototype, from an empty repo to a deployed app.
+- **Netlify:** hosting and pull-request previews.
+
+## Before the build (product work)
+| Date | What AI did | My decision |
+| --- | --- | --- |
+| Late Sep – 7 Oct 2026 | Read the challenge brief; researched Razorpay's Agentic Dashboard, Agent Studio and offer stack from public pages; first pitch and stress test | Chose Track 2 and the "decide and prove" checkout-offer problem |
+| 8 Oct | Wrote the execution logic; simulated 25 stores over 8 weeks in Python (engine vs blanket coupon) | Agreed: shopper groups, not per-shopper pricing; no LLM at checkout |
+| 9 Oct | Built the first demo merchant's numbers; flagged and fixed its own inconsistent lapsed-shopper lift, then re-ran all totals | Asked how "similar stores" are chosen and how extra sales are counted, which shaped the explanation screens |
+| 9–10 Oct | PRD, white paper, cohort sizing from public store data | Narrowed the cohort to Instagram-first fashion brands at ₹20–50L a month, after founder conversations and PM feedback |
+| 10 Oct | Design samples in Razorpay's public dashboard style | Approved the screen set |
+| 10 Oct | Explained the group-to-offer maths; ran stress tests | **Challenged the 3x return target.** Switched the engine to "most profit, never below break-even" because a ratio target drops big profitable groups |
+| 10 Oct | Recruiter-style critique, product and build plan, this spec, Alpha Apparel numbers computed in Python | Set the demo brand (Alpha Apparel) and persona. Accepted AI's correction of my sales figure from ₹15–20K to about ₹27 lakh a month (₹15–20K is about 12 orders, too few to optimise) |
+
+## Build sessions (Claude Code appends below)
+<!-- Format: ### YYYY-MM-DD HH:MM — Part N: title
+- Built:
+- Key prompts or decisions:
+- Changed from spec (and why):
+- Tests:
+- Time taken: -->
+
+### 2026-10-10 — Parts 2–7 in one cloud session (foundation → ship)
+- Built: Vite + React + TS (strict) + Tailwind/tokens shell with prototype bar, demo clock and Ray top bar (Part 2); typed fixtures, Razorpay-shaped entities, `DataSource`, `MockDataSource`, seeded Alpha generator (baseline + pilot day 20, exact counts, holdout hash by rejection sampling), 1,200-merchant network with a 180-store quota pool re-centred to the fixture lifts, `peerPrivacyCheck`, Razorpay adapter stub, `npm run gen` (Part 3); economics, plan optimiser (3 goals), scenarios, measure (90% ranges, blended lifts, fee basis), guardrails, explain, checkout lookup, creator report (Part 4); Home, Setup & plan (approve + jump 20 days), Checkout simulator, Results with override drawer and audit log (Part 5); Ray demo router + tools + templates, privacy and red-team tests, Agent Studio, Guardrails & data, optional live mode via `netlify/functions/ray.ts` (Part 6); Play demo stepper, mobile checks at 390 px, loading/error states, README (Part 7).
+- Key decisions: the user asked for the whole kit in one session to save credit, so Parts 2–7 were built together and committed per part at the end rather than across three sessions. Every on-screen number is computed by the engine from fixtures; captions in the demo stepper carry no figures.
+- Changed from spec (and why):
+  - Results always measure the default plan's offers, because the synthetic pilot data was generated for `pilot_truth.plan_offers`. If the merchant approves a different plan, a banner says so.
+  - The "orders steady" infeasible case reports two numbers: the best change reachable within budget (−3.6% at ₹1L) and the best at any budget up to ₹10L at break-even (−2.85%, "about −2.9%"). The budget option is offered only when the second meets the floor (spec test: floor 2% → infeasible, no budget option).
+  - Privacy and guardrail refusals are always answered locally, even in live mode, so those messages never reach the model.
+- Tests: 58 passing (`npm test`): all `expected_outputs.json` values within tolerance, generator/aggregate per-group checks, 180-store pool and medians, MEERA15 140/90, privacy refusals and import scan, guardrails, all 11 red-team cases, smoke render of every route. `npm run build` passes. Playwright check at 390 px and 1366 px: no horizontal scroll, no console errors, approve → jump → override shows −₹31,248.
+- Time taken: one session.
+
+## Open questions
+<!-- Claude Code adds unclear spec points here with the option it chose. -->
+- SPEC 5.2 asks the aggregated baseline "conversions within 0.5%" of the fixture, but the baseline month includes code lifts, so it can't match `base_conversion`. Chose: compare with the fixture-implied rate (base + share × code lift); checkouts exact, AOV exact to the rupee.
+- "About −2.9%" for the best reachable orders change is −2.85% exactly (rounds to −2.8 half-even). Chose: test with the spec's ±0.1 tolerance.
+- Live-mode model: spec says `claude-sonnet-5-5`; kept as default (override with `ANTHROPIC_MODEL`). The function uses low effort and the server-side refusal fallback (`fallbacks: "default"`).
+
+## Where AI was wrong or I overruled it
+- 3x return target → most-profit objective (my challenge).
+- Lapsed-shopper lift inconsistency in the first demo numbers (AI flagged and fixed its own error).
+- Early design samples used a Razorpay-style wordmark → replaced with a concept label and no brand assets.
