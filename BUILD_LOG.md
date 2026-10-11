@@ -77,6 +77,8 @@ How AI tools were used, what they did, how they sped up the work, and where I ma
 - Phase 0 audit: `docs/V2_AUDIT.md`. Phase-by-phase AI build log: `docs/AI_BUILD_LOG.md`.
 - Phase 1 (flag `netReturns`): profit and returns net of returns and failed COD (81% kept), default keep ₹500, draft vs approved settings with Approve changes / Discard, storage v2 with v1 migration, honest Why-AI comparison on the same budget, day-aware proof/alerts, control groups within ±3 pp. Tests 128 passing; build passes.
 
+- Phase 2 (flag `heroMetric`): cost per extra order hero card (Results, Impact, Home), named AI (uplift model, network playbook, experiment engine, Ray), "AI re-decides every night" replaces "No AI at checkout". Tests 131 passing; build passes.
+
 <!-- Claude Code adds unclear spec points here with the option it chose. -->
 - v2 §3.2 expects ALPHA10 ₹746 per extra order and ₹617 earned; the engine gives ₹730 (254.8 extra orders) and ₹614 (store AOV ₹1,516). Chose: keep the engine values and report them.
 - v2 Phase 3 needs "₹150 off", which is not in `fixtures/offers.json`. Chose: define it in code as a cheaper amount of the "₹ off" offer already on the menu (fixtures untouched).

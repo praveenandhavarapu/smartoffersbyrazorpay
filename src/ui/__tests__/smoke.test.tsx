@@ -10,7 +10,7 @@ import { inr } from '../../lib/format';
 /** The headline loss, from the engine (v2 counts returns, so no hard-coded figure here). */
 const alpha10Loss = async () => {
   const d = derive(await loadModel(), { settings: DEFAULT_USER_SETTINGS, approved: false, approvedSettings: null, overrides: {}, killed: false, moment: 'before' });
-  return new RegExp(`ALPHA10 lost you ${inr(Math.abs(d.a10.profit))} last month`);
+  return new RegExp(`(ALPHA10 lost you|You lost) ${inr(Math.abs(d.a10.profit))} last month`);
 };
 
 describe('app shell', () => {

@@ -14,6 +14,8 @@ import { DEMO_DATES, toUnix } from '../../lib/dates';
 import { inr, inrSigned, num, pctOf, xr } from '../../lib/format';
 import { MonoTag } from './bits';
 import { FEATURES } from '../../config/features';
+import { HeroMetric } from './HeroMetric';
+import { TABLE_NAME } from './HowAIWorks';
 
 type Row = { metric: string; now: ReactNode; target: ReactNode; why: string; ok?: boolean | null };
 
@@ -98,10 +100,15 @@ export function ImpactView() {
         {live ? (
           <div className="north-v"><b>{inrSigned(monthly(snap.profit))}</b><span>a month (day {snap.days}) · 90% range {inrSigned(monthly(profitLow))} to {inrSigned(monthly(profitHigh))}</span></div>
         ) : <div className="north-v"><b>{inrSigned(FEATURES.netReturns ? derived.live.profit : derived.draft.profit)}</b><span>a month, planned (before launch, from similar stores)</span></div>}
+        {FEATURES.heroMetric && <HeroMetric day={live ? derived.today : null} />}
         <p className="small muted">Why this metric: it is what the merchant keeps, it counts only orders the holdout proves were extra, and the fee is tied to it, so Razorpay earns only when the merchant does.</p>
       </section>
 
       <Table title="Merchant outcomes" rows={[
+        ...(FEATURES.heroMetric ? [(() => {
+          const cpo = live ? snap.metrics.costPerExtraOrder : derived.live.extraOrders ? derived.live.spend / derived.live.extraOrders : null;
+          return { metric: 'Cost per extra order', now: cpo === null ? na : <>{inr(cpo)} <span className="sub">{live ? `day ${snap.days}` : 'planned'} · ALPHA10 {derived.a10CostPerOrder === null ? '—' : inr(derived.a10CostPerOrder)}</span></>, target: `below earned per extra order (${inr(derived.earnedPerOrder)})`, why: 'What a discount costs per order it actually creates, against what that order earns after returns.', ok: cpo === null ? null : cpo < derived.earnedPerOrder };
+        })()] : []),
         { metric: FEATURES.netReturns ? 'Return after returns on offer spend' : 'Return on offer spend', now: live ? <>{xr(snap.ret)} <span className="sub">range {xr(snap.retLow)}–{xr(snap.retHigh)}</span></> : xr(FEATURES.netReturns ? derived.live.ret : derived.draft.ret), target: `≥ ${xr(derived.breakEven)} (break-even)`, why: 'Below break-even, every offer rupee loses money.', ok: live ? snap.ret >= derived.breakEven : null },
         { metric: 'Offers + coupons as % of sales', now: live ? <>{pctOf(shareAfter)} <span className="sub">was {pctOf(shareBefore)} with ALPHA10</span></> : pctOf(shareBefore), target: `< ${pctOf(TARGETS.discountShareMax, 0)}`, why: 'Discount waste shows up here first.', ok: live ? shareAfter < TARGETS.discountShareMax : null },
         { metric: 'Extra orders vs holdout', now: live ? <>{num(monthly(snap.extraOrders))} a month <span className="sub">proven at least {num(monthly(snap.extraOrdersLow))}</span></> : na, target: 'lower bound > 0', why: 'Proof that offers create orders, not just discount them.', ok: live ? snap.extraOrdersLow > 0 : null },
@@ -130,7 +137,7 @@ export function ImpactView() {
       ]} />
 
       <Table title="Guardrails (must not get worse)" rows={[
-        { metric: 'Checkout decision time', now: `${latency.toFixed(3)} ms average (measured now in your browser)`, target: `< ${CHECKOUT_BUDGET_MS} ms`, why: 'Checkout speed is sacred; a lookup table, no AI in the path.', ok: latency < CHECKOUT_BUDGET_MS },
+        { metric: 'Checkout decision time', now: `${latency.toFixed(3)} ms average (measured now in your browser)`, target: `< ${CHECKOUT_BUDGET_MS} ms`, why: FEATURES.heroMetric ? `Checkout speed is sacred: it reads ${TABLE_NAME}; AI re-decides every night, never in the payment path.` : 'Checkout speed is sacred; a lookup table, no AI in the path.', ok: latency < CHECKOUT_BUDGET_MS },
         { metric: 'Monthly budget', now: live ? `${inr(projectedSpend)} projected of ${inr(budget)}` : `${inr(FEATURES.netReturns ? derived.live.spend : derived.draft.spend)} planned of ${inr(budget)}`, target: 'never above budget (hard stop)', why: 'Spend can never exceed what the merchant approved.', ok: live ? projectedSpend <= budget * 1.02 : true },
         { metric: 'Daily cap breaches', now: live ? `${capBreaches}` : na, target: '0', why: `Daily cap ${inr(DAILY_SPEND_CAP)} stops runaway days.`, ok: live ? capBreaches === 0 : null },
         { metric: 'Return rate (orders)', now: live ? <>{pctOf(returnsNow)} <span className="sub">{pctOf(returnsBefore)} before</span></> : pctOf(returnsBefore), target: 'no increase', why: 'Discount-driven orders can come back as returns.', ok: live ? returnsNow <= returnsBefore + 0.02 : null },

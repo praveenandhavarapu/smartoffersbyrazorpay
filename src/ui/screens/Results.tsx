@@ -16,6 +16,7 @@ import { Banner, Kpi, OfferChip, shortGroup } from '../components/bits';
 import { OverrideDrawer } from '../components/OverrideDrawer';
 import { FEATURES } from '../../config/features';
 import { RETURN_LABEL } from '../../engine/net';
+import { HeroMetric } from '../components/HeroMetric';
 
 export function Results() {
   const { model, derived } = useModel();
@@ -82,6 +83,7 @@ export function Results() {
         {approved && derived.approvedDiffersFromPilot && <Banner>Your approved plan differs from the default; the synthetic pilot data was generated for the default plan, so results below measure that plan.</Banner>}
         {killed && <Banner tone="warn">{alpha10Restored ? 'Smart Offers stopped and ALPHA10 restored for everyone.' : 'Kill switch on: every group sees no offer. Shoppers get the store\'s default checkout.'} Logged in the audit log.</Banner>}
         {SNAP_DAYS[snapshot] > nowDay && <Banner>Day {s.days} is a projection from today's measured rates, not measured data.</Banner>}
+        {FEATURES.heroMetric && <HeroMetric day={snapshot} />}
         {approved && <PilotDecisionCard />}
 
         <div className="k4">

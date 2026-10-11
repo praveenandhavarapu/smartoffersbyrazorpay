@@ -39,3 +39,16 @@ How the v2 build was made: what the AI (Claude Code) did, which decisions came f
   - Everything else matches within rounding: −₹31,943, 1.66x, +₹22,595, +₹20,071, 2.63x, ₹473, organic +₹314. Plan offers unchanged.
 - **Behaviour note:** with returns counted, a 3x "return after returns" floor keeps no offers. Ray now suggests the highest half-step floor that still keeps one (2.5x).
 - **Time:** ~2 h.
+
+## Phase 2 — AI framing + hero metric (11 Oct 2026)
+
+- **AI did:**
+  - `HeroMetric` card on Results (top row, follows the selected day), Impact (today) and in the Home banner. It shows cost per extra order, earned per extra order after returns, ALPHA10's cost, a trend ALPHA10 → Day 7 … Day 60 (proj.) with the earned line, and leaked rupees as a secondary line.
+  - New Impact merchant-outcome row with target "below earned per extra order".
+  - Pre-launch Home banner rewritten from engine values.
+  - `HowAIWorks` names the Uplift model, Network playbook (with the live trust %), Experiment engine and Ray. It appears on the Agent Studio overview and About, and in compact form inside Why AI.
+  - Replaced "No AI at checkout" / "precomputed table" everywhere with "AI re-decides every night. Checkout just reads the answer in under 1 ms." and "tonight's decision table".
+  - Tests: the same cost per extra order on Home, Results, Impact and Ray; the pre-launch banner; the old phrasing gone; models named. 131 tests.
+- **From the spec (Praveen):** hero metric choice (cost per extra order vs earned, not leakage %), exact AI wording, the four named components, placement.
+- **Assumed:** leaked rupees for ALPHA10 come from the same formula applied to last month's code usage. Phase 2 values are engine output, so they show ₹730 / ₹614 rather than §3.2's ₹746 / ₹617 (see Phase 1).
+- **Time:** ~45 min.

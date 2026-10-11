@@ -16,6 +16,7 @@ import { OfferChip, shortGroup } from '../components/bits';
 import type { GroupId } from '../../data/types';
 import { FEATURES } from '../../config/features';
 import { humanise } from '../../lib/labels';
+import { AI_NIGHTLY, HowAIWorks } from '../components/HowAIWorks';
 
 type Tab = 'overview' | 'reviews' | 'impact' | 'runs' | 'transactions' | 'guardrails' | 'activity';
 const CAN = ['Read checkout, order and coupon data', 'Run approved offers within budget', 'Simulate plans and scenarios', 'Pause offers that fall below break-even'];
@@ -87,9 +88,10 @@ export function StudioAgent() {
             <h3>Find, decide, prove</h3>
             <div className="how">
               <div className="fcard"><div className="n">01</div><h6>Find</h6><p>Reads coupons and checkouts; shows where discounts went to buyers who'd buy anyway (ALPHA10: {xr(derived.a10.ret)}).</p></div>
-              <div className="fcard"><div className="n">02</div><h6>Decide</h6><p>Per shopper group, the approved offer with the most profit above break-even, or none, within budget. No AI at checkout: a precomputed table.</p></div>
+              <div className="fcard"><div className="n">02</div><h6>Decide</h6><p>Per shopper group, the approved offer with the most profit above break-even, or none, within budget. {FEATURES.heroMetric ? AI_NIGHTLY : 'No AI at checkout: a precomputed table.'}</p></div>
               <div className="fcard"><div className="n">03</div><h6>Prove</h6><p>A 10% holdout sees no offer. Results show measured lift with 90% ranges and "still learning" until the data is clear.</p></div>
             </div>
+            {FEATURES.heroMetric && <><div className="st-label ai-sub">The AI behind it</div><HowAIWorks /></>}
           </section>
           <section className="st-sec">
             <div className="st-label">Permissions</div>

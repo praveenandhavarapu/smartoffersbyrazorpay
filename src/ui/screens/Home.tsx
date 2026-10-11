@@ -47,13 +47,16 @@ export function Home() {
           ) : approved ? (
             <>
               <b>Smart Offers is {killed ? 'paused' : 'live'}.</b>
-              {FEATURES.netReturns ? (() => { const t = derived.snapshots[derived.today ?? 'day20']; return <span> Day {t.days}: {inrSigned(t.profit)} extra profit after returns vs the holdout, {RETURN_LABEL.toLowerCase()} {xr(t.ret)}. ALPHA10 would have lost {inr(Math.abs(t.alpha10SamePeriod))} in the same period.</span>; })()
+              {FEATURES.netReturns ? (() => { const t = derived.snapshots[derived.today ?? 'day20']; const c = t.metrics.costPerExtraOrder; return <span> Day {t.days}: {FEATURES.heroMetric && c !== null && <>cost per extra order <b>{inr(c)}</b> vs {inr(derived.earnedPerOrder)} earned after returns (ALPHA10 paid {inr(derived.a10CostPerOrder ?? 0)}). </>}{inrSigned(t.profit)} extra profit after returns vs the holdout, {RETURN_LABEL.toLowerCase()} {xr(t.ret)}. ALPHA10 would have lost {inr(Math.abs(t.alpha10SamePeriod))} in the same period.</span>; })()
                 : <span> Day 20: {inrSigned(derived.snapshots.day20.profit)} extra profit vs the holdout, return {xr(derived.snapshots.day20.ret)}. ALPHA10 would have lost {inr(Math.abs(derived.snapshots.day20.alpha10SamePeriod))} in the same period.</span>}
             </>
           ) : (
             <>
-              <b>ALPHA10 lost you {inr(Math.abs(derived.a10.profit))} last month.</b>
-              <span> It cost {inr(derived.a10.spend)} for {xr(derived.a10.ret)} back{FEATURES.netReturns ? ' after returns' : ''}, below your {xr(derived.breakEven)} break-even. {pctOf((derived.a10.rows.find((r) => r.group === 'returning')?.spend ?? 0) / derived.a10.spend, 0)} went to returning buyers who'd buy anyway.</span>
+              {FEATURES.heroMetric && derived.a10CostPerOrder !== null ? <>
+                <b>ALPHA10 paid {inr(derived.a10CostPerOrder)} in discounts for every order it created.</b>
+                <span> Each order earned you {inr(derived.earnedPerOrder)} after returns. You lost {inr(Math.abs(derived.a10.profit))} last month; {inr(derived.a10Leaked)} went to buyers who'd have bought anyway.</span>
+              </> : <><b>ALPHA10 lost you {inr(Math.abs(derived.a10.profit))} last month.</b>
+              <span> It cost {inr(derived.a10.spend)} for {xr(derived.a10.ret)} back{FEATURES.netReturns ? ' after returns' : ''}, below your {xr(derived.breakEven)} break-even. {pctOf((derived.a10.rows.find((r) => r.group === 'returning')?.spend ?? 0) / derived.a10.spend, 0)} went to returning buyers who'd buy anyway.</span></>}
             </>
           )}
         </div>

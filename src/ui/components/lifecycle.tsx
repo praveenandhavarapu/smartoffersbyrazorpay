@@ -16,6 +16,7 @@ import type { Snapshot } from '../../engine/measure';
 import { FEATURES } from '../../config/features';
 import { RETURN_LABEL } from '../../engine/net';
 import { groupLabel, offerLabel } from '../../lib/labels';
+import { AI_NIGHTLY, HowAIWorks } from './HowAIWorks';
 
 /** 🔔 in the top bar: opportunities and lifecycle prompts. */
 export function NotificationsBell() {
@@ -104,7 +105,10 @@ export function WhyAI({ which }: { which?: 'draft' | 'live' }) {
       ) : (
         <p className="small"><b>{cmp.verdict === 'tie' ? 'At your margin a simple rule does about as well.' : 'At your margin a simple rule does as well or better on paper.'}</b> Smart Offers still adds: proof via the holdout, weekly re-testing, and stopping offers that stop paying.</p>
       )}
-      <p className="small muted">The language model (Ray) only explains and drafts. Checkout decisions come from a precomputed table, so AI never sits in the payment path.</p>
+      {FEATURES.heroMetric ? <>
+        <HowAIWorks compact />
+        <p className="small muted">{AI_NIGHTLY} No AI model sits in the payment path.</p>
+      </> : <p className="small muted">The language model (Ray) only explains and drafts. Checkout decisions come from a precomputed table, so AI never sits in the payment path.</p>}
     </div>
   );
 }

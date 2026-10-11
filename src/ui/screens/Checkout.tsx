@@ -9,6 +9,8 @@ import { Info, Lock, Tag } from '../components/Icons';
 import { Banner, MonoTag, OfferChip } from '../components/bits';
 import { useDemo } from '../components/demoStore';
 import { RETURN_LABEL } from '../../engine/net';
+import { FEATURES } from '../../config/features';
+import { AI_NIGHTLY, TABLE_NAME } from '../components/HowAIWorks';
 
 function CustomForm({ value, onChange }: { value: Shopper; onChange: (s: Shopper) => void }) {
   const cart = cartValue(value);
@@ -65,7 +67,7 @@ export function Checkout() {
       <div className="co-head">
         <MonoTag>Checkout simulator · Magic Checkout-style sheet</MonoTag>
         <h2>Same store, different shoppers, different offers</h2>
-        <p>The offer comes from a precomputed table (no AI at checkout). Pick a shopper.</p>
+        <p>{FEATURES.heroMetric ? `The offer comes from ${TABLE_NAME}: ${AI_NIGHTLY}` : 'The offer comes from a precomputed table (no AI at checkout).'} Pick a shopper.</p>
       </div>
       <div className="co-grid">
         <div className="shoppers" role="radiogroup" aria-label="Sample shoppers">

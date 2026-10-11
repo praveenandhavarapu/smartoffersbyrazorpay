@@ -4,7 +4,7 @@
  */
 export const FEATURES = {
   netReturns: true, // Phase 1: count returns and failed COD in profit; draft vs approved settings
-  heroMetric: false, // Phase 2: cost per extra order; "AI re-decides every night" framing
+  heroMetric: true, // Phase 2: cost per extra order; "AI re-decides every night" framing
   experiments: false, // Phase 3: Suggest → Test → Prove → Promote
   playbook: false, // Phase 4: "Stores like yours"
   discountBrain: false, // Phase 5: decisions served to other agents

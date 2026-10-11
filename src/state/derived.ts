@@ -16,7 +16,7 @@ import { countsFromFormula, feeBasis, measure, type ArmCounts, type Snapshot } f
 import { creatorReport } from '../engine/creators';
 import { nearBreakEven } from '../engine/guardrails';
 import { compareStrategies, profitOverRatio } from '../engine/compare';
-import { costPerExtraOrder, dayMetrics, earnedPerExtraOrder, keptRate } from '../engine/net';
+import { costPerExtraOrder, dayMetrics, earnedPerExtraOrder, keptRate, leakedRupees } from '../engine/net';
 import { FEATURES } from '../config/features';
 import { GOAL_LABEL, groupLabel, offerLabel } from '../lib/labels';
 import type { Model } from './model';
@@ -99,6 +99,11 @@ export function derive(m: Model, st: DerivedInput) {
     discounts: allCodes.spend, discountShare: allCodes.spend / gmv, conversion: so.today / g.reduce((a, x) => a + x.checkouts, 0),
   };
   const rule = ruleFirstOrderOnly(g, v2 ? margin : draftMargin, 0.9, kept);
+  // ALPHA10's discount that went to buyers who would have bought anyway (spend × base rate ÷ rate with the code).
+  const a10Leaked = g.reduce((acc, x) => acc + x.today.filter((u) => u.code === 'ALPHA10').reduce((t, u) => {
+    const n = x.checkouts * u.share, withCode = x.baseConversion + u.liftPp / 100;
+    return t + leakedRupees(n * withCode * u.discountInr, x.baseConversion, withCode);
+  }, 0), 0);
 
   const live: PlanResult = buildPlan(g, toPlanSettings(liveSettings, st.overrides));
   const liveRange = planRange(g, live, m.pool.p25, m.pool.p75);
@@ -200,7 +205,7 @@ export function derive(m: Model, st: DerivedInput) {
     margin, breakEven: be, kept, draftMargin, draftBreakEven: breakEven(draftMargin), liveSettings, hasDraft,
     draftDiff: hasDraft && st.approvedSettings ? [...settingsDiff(st.approvedSettings, draftSettings), ...planDiff(live, draft)] : [],
     draft, range, liveRange, a10, a10AtMargin, allCodes, store, storeOrders: so, rule,
-    a10CostPerOrder: costPerExtraOrder(a10.spend, a10.extraOrders), earnedPerOrder,
+    a10CostPerOrder: costPerExtraOrder(a10.spend, a10.extraOrders), earnedPerOrder, a10Leaked,
     live, liveOffers, defaultPlan,
     snapshots, today, nowDay: NOW_DAY[moment],
     reviews, nextReview, alerts, pilot, daysLeft,
