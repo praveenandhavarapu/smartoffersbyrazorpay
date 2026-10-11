@@ -32,7 +32,13 @@ export const OFFERS: Offer[] = offersJson.ladder.map((o) => ({
   costPerOrderInr: o.cost_per_order_inr,
   eligibleIf: (o as { eligible_if?: string }).eligible_if,
 }));
-export const OFFER_BY_ID: Record<OfferId, Offer> = Object.fromEntries(OFFERS.map((o) => [o.id, o])) as Record<OfferId, Offer>;
+/** v2 experiment variants (not in fixtures/offers.json; defined here as code, used only by the learning loop). */
+export const VARIANT_OFFERS: Offer[] = [
+  { id: 'flat_150', label: '₹150 off', costPerOrderInr: 150, eligibleIf: 'cart_value >= 1500' },
+  { id: 'free_shipping_999', label: 'Free shipping on ₹999+', costPerOrderInr: profileJson.shipping_fee_inr, eligibleIf: 'cart_value >= 999' },
+  { id: 'free_shipping_prepaid', label: 'Free shipping, prepaid only', costPerOrderInr: profileJson.shipping_fee_inr, eligibleIf: 'prepaid and cart_value < 1500' },
+];
+export const OFFER_BY_ID: Record<OfferId, Offer> = Object.fromEntries([...OFFERS, ...VARIANT_OFFERS].map((o) => [o.id, o])) as Record<OfferId, Offer>;
 export const OFFER_RULES = offersJson.rules;
 export const EXISTING_CODES = offersJson.existing_codes;
 

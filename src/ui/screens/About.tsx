@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useModel } from '../../state/ModelContext';
 import { inr, inrSigned, num, pctOf, xr } from '../../lib/format';
 import { PageHeader } from '../components/kit';
+import { FEATURES } from '../../config/features';
+import { HowAIWorks } from '../components/HowAIWorks';
+import { AboutV2 } from '../components/AboutV2';
 
 const CANDIDATES: { problem: string; size: number; measurable: number; unsolved: number; fit: number; note: string }[] = [
   { problem: 'Always-on coupons paid to buyers who would buy anyway', size: 4, measurable: 5, unsolved: 5, fit: 5, note: 'Chosen. Large, invisible today, provable with a holdout, and it lives at checkout where Razorpay already is.' },
@@ -24,7 +27,7 @@ export function About() {
       <section className="card pad">
         <h2>The problem in one line</h2>
         <p className="lead">D2C fashion brands pay always-on coupons to shoppers who would have bought anyway, and they can't see it, because nothing measures what a discount actually adds.</p>
-        <p>For the demo store, {p.displayName}: last month ALPHA10 cost <b>{inr(derived.a10.spend)}</b> and returned <b>{xr(derived.a10.ret)}</b> against a {xr(derived.breakEven)} break-even, a loss of <b>{inr(Math.abs(derived.a10.profit))}</b>. {ret && <>{pctOf(ret.spend / derived.a10.spend, 0)} of it went to returning buyers, who buy {num(model.groups.find((g) => g.id === 'returning')!.baseConversion * 100)} times in 100 without any offer.</>} All coupons together were <b>{pctOf(derived.store.discountShare)}</b> of sales.</p>
+        <p>For the demo store, {p.displayName}: last month ALPHA10 cost <b>{inr(derived.a10.spend)}</b> and returned <b>{xr(derived.a10.ret)}</b>{FEATURES.netReturns ? ' after returns' : ''} against a {xr(derived.breakEven)} break-even, a loss of <b>{inr(Math.abs(derived.a10.profit))}</b>. {ret && <>{pctOf(ret.spend / derived.a10.spend, 0)} of it went to returning buyers, who buy {num(model.groups.find((g) => g.id === 'returning')!.baseConversion * 100)} times in 100 without any offer.</>} All coupons together were <b>{pctOf(derived.store.discountShare)}</b> of sales.</p>
         <p className="small muted">Size of the opportunity (assumptions to validate with Razorpay data): the target cohort is Instagram- and creator-led fashion brands selling ₹20–50 lakh a month on Magic Checkout with an always-on code. If a typical store wastes a similar share, the saving is roughly the {inr(Math.abs(derived.a10.profit))} a month shown here, per store, before any growth from better-targeted offers.</p>
       </section>
 
@@ -73,15 +76,21 @@ export function About() {
             ['Find', 'Ray flags a coupon below break-even and shows the signals'],
             ['Decide', 'An offer or none per shopper group, for profit, within budget'],
             ['Approve', 'Nothing spends money without a click; kill switch any time'],
-            ['Run', 'Precomputed checkout table; agent runs daily at 06:00'],
+            ['Run', FEATURES.heroMetric ? "AI re-decides every night; checkout reads tonight's decision table" : 'Precomputed checkout table; agent runs daily at 06:00'],
             ['Prove', '10% holdout, ranges, "still learning"'],
             ['Review weekly', 'Monday review re-plans from results; you approve changes'],
             ['Decide on day 30', 'Keep (pay 1% of proven sales), extend, or stop'],
             ['Grow', 'Next experiments: COD → prepaid, abandoned carts, creator codes'],
           ].map(([h, d], i) => <div key={h} className="loop-step"><span>{i + 1}</span><b>{h}</b><p>{d}</p></div>)}
         </div>
-        <p className="small">Expected result for {p.displayName}: <b>{inrSigned(derived.defaultPlan.profit)}</b> a month vs ALPHA10's {inrSigned(derived.a10.profit)}; a simple "first orders only" rule would make {inrSigned(derived.rule.profit)}.</p>
+        <p className="small">Expected result for {p.displayName}: <b>{inrSigned(derived.defaultPlan.profit)}</b> a month vs ALPHA10's {inrSigned(derived.a10.profit)}; a simple "first orders only" rule would make {inrSigned(FEATURES.netReturns ? derived.strategies[1].profit : derived.rule.profit)}{FEATURES.netReturns ? ' (same shoppers, same budget, after returns)' : ''}.</p>
       </section>
+      {FEATURES.heroMetric && (
+        <section className="card pad">
+          <h2>How the AI works</h2>
+          <HowAIWorks />
+        </section>
+      )}
 
       <section className="card pad grid-2">
         <div>
@@ -100,11 +109,12 @@ export function About() {
             <li><b>Wrong margin flips the plan.</b> Margin asked in plain words, sanity check, "what if 30%" scenario.</li>
             <li><b>Small groups take long to prove.</b> Ranges, "still learning", no decisions before day 14, fee on the lower bound.</li>
             <li><b>Runaway spend.</b> Budget hard stop, daily cap, ₹250 per order, one offer per order.</li>
-            <li><b>Checkout slows down.</b> Lookup table, 50 ms budget, store default on failure.</li>
+            <li><b>Checkout slows down.</b> {FEATURES.heroMetric ? "Checkout reads tonight's decision table" : 'Lookup table'}, 50 ms budget, store default on failure.</li>
             <li><b>Privacy.</b> Peer data only as averages of 20+ stores; no names; contacts masked.</li>
           </ul>
         </div>
       </section>
+      {FEATURES.aboutV2 && <AboutV2 />}
     </div>
   );
 }

@@ -14,8 +14,17 @@ import { ExperimentsList, ReviewsList, StopButton, WhyAI } from '../components/l
 import { ImpactView } from '../components/Impact';
 import { OfferChip, shortGroup } from '../components/bits';
 import type { GroupId } from '../../data/types';
+import { FEATURES } from '../../config/features';
+import { humanise } from '../../lib/labels';
+import { NowStrip } from '../components/NowStrip';
+import { DiscountBrain } from '../components/DiscountBrain';
+import { ExperimentsTab } from '../components/Experiments';
+import { dayOf, KEYS } from '../../engine/learning';
+import { pendingActions } from '../../state/derived';
+import { EXPERIMENT_SPACE_TEXT } from '../../state/store';
+import { AI_NIGHTLY, HowAIWorks, TABLE_NAME } from '../components/HowAIWorks';
 
-type Tab = 'overview' | 'reviews' | 'impact' | 'runs' | 'transactions' | 'guardrails' | 'activity';
+type Tab = 'overview' | 'reviews' | 'experiments' | 'impact' | 'runs' | 'transactions' | 'guardrails' | 'activity';
 const CAN = ['Read checkout, order and coupon data', 'Run approved offers within budget', 'Simulate plans and scenarios', 'Pause offers that fall below break-even'];
 const CANNOT = ['Change product prices', 'Exceed the monthly budget', 'Launch without your approval', 'Message shoppers', 'Use device, gender or income'];
 const PAGE = 25;
@@ -32,7 +41,9 @@ export function StudioAgent() {
   const kill = useStore((s) => s.kill);
   const resume = useStore((s) => s.resume);
   const audit = useStore((s) => s.audit);
-  const settings = useStore((s) => s.settings);
+  // Live surfaces read the approved settings (v2 §3.3); the edit buffer is only for Setup & plan.
+  const draftBuffer = useStore((s) => s.settings);
+  const settings = FEATURES.netReturns ? derived.liveSettings : draftBuffer;
   const [group, setGroup] = useState<'all' | GroupId>('all');
   const [page, setPage] = useState(0);
   const live = approved && moment !== 'before';
@@ -40,11 +51,34 @@ export function StudioAgent() {
   const orderById = useMemo(() => new Map(v.orders.map((o) => [o.id, o])), [v]);
   const pilotOrders = useMemo(() => v.orders.filter((o) => o.notes.arm && o.notes.arm !== 'pre_pilot' && (group === 'all' || o.notes.group_id === group)).reverse(), [v, group]);
   const payByOrder = useMemo(() => new Map(v.payments.filter((p) => p.captured || p.status === 'refunded').map((p) => [p.order_id, p])), [v]);
-  const d20 = derived.snapshots.day20;
+  const d20 = FEATURES.netReturns ? derived.snapshots[derived.today ?? 'day20'] : derived.snapshots.day20;
   const status = !approved ? 'Not installed' : killed ? 'Paused (kill switch)' : moment === 'before' ? 'Approved · first run 06:00' : 'Running daily · 06:00';
   const label = (g: string) => shortGroup(model.groups.find((x) => x.id === g)!.label);
   const decisions = useStore((x) => x.reviewDecisions);
-  const pendingReviews = derived.reviews.reduce((a, r) => a + r.items.filter((i) => i.action && !decisions[i.id]).length, 0);
+  const pendingReviews = FEATURES.experiments ? pendingActions(derived.reviews, decisions).length : derived.reviews.reduce((a, r) => a + r.items.filter((i) => i.action && !decisions[i.id]).length, 0);
+  const experimentSpace = useStore((s) => s.experimentSpace);
+  const undone = useStore((s) => s.undone);
+  const undoEvent = useStore((s) => s.undoEvent);
+  const L = derived.learning;
+  /** Runs: the action reflects that day's agent event (v2 §7.6), not a fixed sentence. */
+  const runAction = (date: string, fallback: string): string => {
+    const d = dayOf(date);
+    const ev = L?.events.find((e) => e.day === d);
+    if (/cap|Kill switch|Published/.test(fallback)) return fallback;
+    if (ev) { const t = ev.summary.replace(/^Week \d+ review: /, ''); return t.charAt(0).toUpperCase() + t.slice(1); }
+    const big = L?.rows.find((r) => r.id === KEYS.startBig);
+    const running = big?.startedOn && d > dayOf(big.startedOn) && (big.status === 'running' || (big.decisionDate && d < dayOf(big.decisionDate)));
+    return `Refreshed ${TABLE_NAME}${running ? ` · ₹150 off challenger running (day ${d - dayOf(big!.startedOn!) + 1})` : ''}`;
+  };
+  type Row = { key: string; n: number | string; date: string; actor: string; summary: string; before?: string; after?: string; impact?: string; undo?: () => void; undone?: boolean };
+  const activity: Row[] = [
+    ...audit.map((a): Row => ({ key: `a${a.id}`, n: a.id, date: a.demoDate, actor: a.actor, summary: (FEATURES.netReturns ? humanise(a.summary) : a.summary) ?? '', before: FEATURES.netReturns ? humanise(a.before) : a.before, after: FEATURES.netReturns ? humanise(a.after) : a.after })),
+    ...(FEATURES.experiments && L ? L.events.filter((e) => !e.projected && e.day <= derived.nowDay).map((e): Row => ({
+      key: e.id, n: 'agent', date: e.date, actor: e.actor, summary: e.summary + (e.needsApproval ? (e.decision ? ` (${e.decision === 'approved' ? 'approved by you' : 'kept as is'})` : ' (waiting on you)') : ''),
+      before: e.before, after: e.after, impact: e.impactInr !== undefined ? `${inrSigned(e.impactInr)} / month` : undefined,
+      undo: e.undoable && !undone.includes(e.id) ? () => undoEvent(e.id, e.summary.replace(/^Week \d+ review: /, '')) : undefined, undone: undone.includes(e.id),
+    })) : []),
+  ].sort((a, b) => (a.date === b.date ? (typeof a.n === 'number' && typeof b.n === 'number' ? b.n - a.n : typeof a.n === 'number' ? -1 : 1) : a.date < b.date ? 1 : -1));
 
   return (
     <div className="studio">
@@ -57,7 +91,17 @@ export function StudioAgent() {
           : killed ? <button className="btn primary sm" onClick={resume}>Resume</button>
           : <><StopButton className="btn dark sm" label="Stop…" /><button className="btn dark sm" onClick={kill}>Kill switch</button></>}
       </div>
-      <div className="st-tabs"><Tabs<Tab> value={tab} onChange={(t) => setSp({ tab: t })} items={[{ id: 'overview', label: 'Overview' }, { id: 'reviews', label: <>Weekly reviews{pendingReviews > 0 && <span className="tab-n">{pendingReviews}</span>}</> }, { id: 'impact', label: 'Impact' }, { id: 'runs', label: 'Runs' }, { id: 'transactions', label: 'Transactions' }, { id: 'guardrails', label: 'Guardrails' }, { id: 'activity', label: 'Activity log' }]} /></div>
+      <div className="st-tabs"><Tabs<Tab> value={tab} onChange={(t) => setSp({ tab: t })} items={[{ id: 'overview', label: 'Overview' }, { id: 'reviews', label: <>Weekly reviews{pendingReviews > 0 && <span className="tab-n">{pendingReviews}</span>}</> }, ...(FEATURES.experiments ? [{ id: 'experiments' as const, label: 'Experiments' }] : []), { id: 'impact', label: 'Impact' }, { id: 'runs', label: 'Runs' }, { id: 'transactions', label: 'Transactions' }, { id: 'guardrails', label: 'Guardrails' }, { id: 'activity', label: 'Activity log' }]} /></div>
+
+      {FEATURES.experiments && <NowStrip />}
+
+      {tab === 'experiments' && FEATURES.experiments && (
+        <section className="st-sec st-light">
+          <h3>Experiments</h3>
+          <p className="st-p">Suggest → Test → Prove → Promote. The agent runs challengers inside the space you approved; promotions and new offer types need your approval.</p>
+          <ExperimentsTab />
+        </section>
+      )}
 
       {tab === 'overview' && (
         <>
@@ -72,9 +116,9 @@ export function StudioAgent() {
               </div>
             </div>
             <div className="feed" aria-label="Live feed">
-              <div className="fcard"><div className="t"><span>Plan</span><b>{approved ? (killed ? 'paused' : 'live') : 'draft'}</b></div><div className="m"><strong>{derived.live.rows.filter((r) => r.offer !== 'none').length} group offers</strong> · {inr(derived.live.spend)} of {inr(derived.live.settings.budget)} · {xr(derived.live.ret)}</div></div>
+              <div className="fcard"><div className="t"><span>Plan</span><b>{approved ? (killed ? 'paused' : 'live') : 'draft'}</b></div><div className="m"><strong>{derived.live.rows.filter((r) => r.offer !== 'none').length} group offers</strong> · {inr(derived.live.spend)} of {inr(derived.live.settings.budget)} · {xr(derived.live.ret)}{FEATURES.netReturns ? ' after returns' : ''}</div></div>
               {live && runs[0] && <div className="fcard"><div className="t"><span>Last run · {fmtDate(runs[0].date, false)} 06:00</span><b>{runs[0].status}</b></div><div className="m">{runs[0].action}. Spend so far {inr(runs[0].cumulativeSpend)} vs pace {inr(runs[0].pace)}.</div></div>}
-              {live && <div className="fcard"><div className="t"><span>Proof · day 20</span><b>{d20.retLow < derived.breakEven ? 'learning' : 'proven'}</b></div><div className="m">{num(d20.extraOrders, 1)} extra orders (range {num(d20.extraOrdersLow)}–{num(d20.extraOrdersHigh)}) · {inrSigned(d20.profit)}</div></div>}
+              {live && <div className="fcard"><div className="t"><span>Proof · day {d20.days}</span><b>{d20.retLow < derived.breakEven ? 'learning' : 'proven'}</b></div><div className="m">{num(d20.extraOrders, FEATURES.netReturns ? 0 : 1)} extra orders (range {num(d20.extraOrdersLow)}–{num(d20.extraOrdersHigh)}) · {inrSigned(d20.profit)}{FEATURES.netReturns ? ' after returns' : ''}</div></div>}
               <div className="fcard dim"><div className="t"><span>Next run</span><b>scheduled</b></div><div className="m">{approved ? `${fmtDate(moment === 'before' ? DEMO_DATES.before : '2026-10-11', false)} 06:00 IST` : 'After you approve a plan'}</div></div>
             </div>
           </div>
@@ -83,10 +127,18 @@ export function StudioAgent() {
             <h3>Find, decide, prove</h3>
             <div className="how">
               <div className="fcard"><div className="n">01</div><h6>Find</h6><p>Reads coupons and checkouts; shows where discounts went to buyers who'd buy anyway (ALPHA10: {xr(derived.a10.ret)}).</p></div>
-              <div className="fcard"><div className="n">02</div><h6>Decide</h6><p>Per shopper group, the approved offer with the most profit above break-even, or none, within budget. No AI at checkout: a precomputed table.</p></div>
+              <div className="fcard"><div className="n">02</div><h6>Decide</h6><p>Per shopper group, the approved offer with the most profit above break-even, or none, within budget. {FEATURES.heroMetric ? AI_NIGHTLY : 'No AI at checkout: a precomputed table.'}</p></div>
               <div className="fcard"><div className="n">03</div><h6>Prove</h6><p>A 10% holdout sees no offer. Results show measured lift with 90% ranges and "still learning" until the data is clear.</p></div>
             </div>
+            {FEATURES.heroMetric && <><div className="st-label ai-sub">The AI behind it</div><HowAIWorks /></>}
           </section>
+          {FEATURES.discountBrain && (
+            <section className="st-sec">
+              <div className="st-label">Decisions served to other agents</div>
+              <h3>One discount brain for every agent</h3>
+              <DiscountBrain />
+            </section>
+          )}
           <section className="st-sec">
             <div className="st-label">Permissions</div>
             <h3>What the agent can and cannot do</h3>
@@ -108,7 +160,7 @@ export function StudioAgent() {
           <section className="st-sec">
             <div className="pricebar">
               <div><b>Free 30-day pilot</b><span>Then 1% of proven extra sales, capped at 20% of extra profit. Proven = lower bound of the 90% range.</span></div>
-              <span className="mono-tag">Day 20 example: {inr(d20.fee.fee)}</span>
+              <span className="mono-tag">Day {d20.days} example: {inr(d20.fee.fee)}</span>
             </div>
           </section>
         </>
@@ -139,7 +191,7 @@ export function StudioAgent() {
               <table className="dtable dark">
                 <thead><tr><th>Run</th><th>Data day</th><th>Checkouts</th><th>Orders with offer</th><th>Holdout</th><th>Spend</th><th>Spend vs pace</th><th>Action</th></tr></thead>
                 <tbody>{runs.map((r) => (
-                  <tr key={r.date}><td>{fmtDate(r.date, false)} 06:00</td><td>{r.dataDay ? fmtDate(r.dataDay, false) : '—'}</td><td>{num(r.checkouts)}</td><td>{num(r.offerOrders)}</td><td>{num(r.holdoutCheckouts)}</td><td>{inr(r.spend)}</td><td>{inr(r.cumulativeSpend)} / {inr(r.pace)}</td><td><Status s={r.status} /> {r.action}</td></tr>
+                  <tr key={r.date}><td>{fmtDate(r.date, false)} 06:00</td><td>{r.dataDay ? fmtDate(r.dataDay, false) : '—'}</td><td>{num(r.checkouts)}</td><td>{num(r.offerOrders)}</td><td>{num(r.holdoutCheckouts)}</td><td>{inr(r.spend)}</td><td>{inr(r.cumulativeSpend)} / {inr(r.pace)}</td><td><Status s={r.status} /> {FEATURES.experiments && derived.learning ? runAction(r.date, r.action) : r.action}</td></tr>
                 ))}</tbody>
               </table>
             </div>
@@ -192,6 +244,7 @@ export function StudioAgent() {
               `10% holdout, sticky per customer`, `Checkout lookup ${CHECKOUT_BUDGET_MS} ms budget; store default on timeout`,
               settings.festiveWindow ? `No offers on ${model.profile.upcomingDrop.name} (${model.profile.upcomingDrop.styles} styles) for ${model.profile.upcomingDrop.fullPriceDays} days` : 'No festive window set',
               `Never uses: ${BANNED_SIGNALS.slice(0, 5).join(', ')}`,
+              ...(FEATURES.experiments ? [experimentSpace ? `Experiment space on: ${EXPERIMENT_SPACE_TEXT}` : 'Experiment space off: no challengers'] : []),
             ].map((g) => <div key={g} className="y"><Check />{g}</div>)}
           </div>
           <p className="st-p">Change budget, margin and rules in <button className="linkish" onClick={() => nav('/offers/smart?tab=plan')}>Smart Offers → Setup &amp; plan</button>.</p>
@@ -203,11 +256,16 @@ export function StudioAgent() {
       {tab === 'activity' && (
         <section className="st-sec">
           <h3>Activity log</h3>
-          {audit.length === 0 ? <div className="fcard"><div className="m">No actions yet. Approvals, overrides, pauses, rule changes and the kill switch appear here.</div></div> : (
+          {activity.length === 0 ? <div className="fcard"><div className="m">No actions yet. Approvals, overrides, pauses, rule changes, agent steps and the kill switch appear here.</div></div> : (
             <div className="tbl-wrap st-table">
               <table className="dtable dark">
-                <thead><tr><th>#</th><th>Demo date</th><th>Actor</th><th>Action</th><th>Before → after</th></tr></thead>
-                <tbody>{[...audit].reverse().map((a) => <tr key={a.id}><td>{a.id}</td><td>{fmtDate(a.demoDate)}</td><td>{a.actor}</td><td>{a.summary}</td><td>{a.before ?? '—'} → {a.after ?? '—'}</td></tr>)}</tbody>
+                <thead><tr><th>#</th><th>Demo date</th><th>Actor</th><th>Action</th><th>Before → after</th>{FEATURES.experiments && <><th>Impact</th><th /></>}</tr></thead>
+                <tbody>{activity.map((a) => (
+                  <tr key={a.key}>
+                    <td>{a.n}</td><td>{fmtDate(a.date)}</td><td>{a.actor}</td><td className="act">{a.summary}</td><td>{a.before ?? '—'} → {a.after ?? '—'}</td>
+                    {FEATURES.experiments && <><td>{a.impact ?? '—'}</td><td className="act-undo">{a.undo && <button className="btn dark sm" onClick={a.undo}>Undo</button>}{a.undone && <span className="small">undone</span>}</td></>}
+                  </tr>
+                ))}</tbody>
               </table>
             </div>
           )}

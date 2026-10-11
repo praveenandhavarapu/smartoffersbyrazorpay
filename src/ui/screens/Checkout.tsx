@@ -8,6 +8,10 @@ import { inr, num, pctOf, xr } from '../../lib/format';
 import { Info, Lock, Tag } from '../components/Icons';
 import { Banner, MonoTag, OfferChip } from '../components/bits';
 import { useDemo } from '../components/demoStore';
+import { RETURN_LABEL } from '../../engine/net';
+import { FEATURES } from '../../config/features';
+import { AI_NIGHTLY, TABLE_NAME } from '../components/HowAIWorks';
+import { PREPAID } from '../../engine/paymentAware';
 
 function CustomForm({ value, onChange }: { value: Shopper; onChange: (s: Shopper) => void }) {
   const cart = cartValue(value);
@@ -52,9 +56,10 @@ export function Checkout() {
 
   const g = model.groups.find((x) => x.id === d.group)!;
   const planOffer = derived.liveOffers[d.group];
-  const why = whyNumbers(g, planOffer, derived.margin);
-  const shipping = d.offer === 'free_shipping' ? 0 : d.shippingInr;
-  const discount = d.offer === 'flat_100' || d.offer === 'flat_200' ? d.savingInr : 0;
+  const prepaidTest = derived.learning?.flags.prepaid === 'approved';
+  const why = whyNumbers(g, planOffer, derived.margin, derived.kept);
+  const shipping = d.offer.startsWith('free_shipping') ? 0 : d.shippingInr;
+  const discount = d.offer.startsWith('flat_') ? d.savingInr : 0;
   const total = d.cartInr - discount + shipping;
 
   return (
@@ -64,7 +69,7 @@ export function Checkout() {
       <div className="co-head">
         <MonoTag>Checkout simulator · Magic Checkout-style sheet</MonoTag>
         <h2>Same store, different shoppers, different offers</h2>
-        <p>The offer comes from a precomputed table (no AI at checkout). Pick a shopper.</p>
+        <p>{FEATURES.heroMetric ? `The offer comes from ${TABLE_NAME}: ${AI_NIGHTLY}` : 'The offer comes from a precomputed table (no AI at checkout).'} Pick a shopper.</p>
       </div>
       <div className="co-grid">
         <div className="shoppers" role="radiogroup" aria-label="Sample shoppers">
@@ -88,7 +93,10 @@ export function Checkout() {
                 <div className="mtop"><div className="mlogo">A</div><div><div className="mname">{model.profile.displayName}</div><div className="msub">{shopper.cart.length} item{shopper.cart.length > 1 ? 's' : ''}</div></div><div className="mtotal">{inr(total)}</div></div>
                 {failSafe && <div className="coupon-row small">Smart Offers unavailable — default checkout</div>}
                 {!failSafe && d.offer !== 'none' ? (
-                  <div className="obanner"><Tag />{OFFER_BY_ID[d.offer].label} applied<span>−{inr(d.savingInr)}</span></div>
+                  <>
+                    <div className="obanner"><Tag />{OFFER_BY_ID[d.offer].label} applied<span>−{inr(d.savingInr)}</span></div>
+                    {FEATURES.paymentAware && prepaidTest && d.group === 'new_ads_small' && <div className="pay-nudge">Challenger variant (15% of this group): <b>Free shipping when you pay by UPI</b><span className="small">COD-likely shopper: {pctOf(1 - PREPAID.share.new_ads_small[0], 0)} of this group pay on delivery</span></div>}
+                  </>
                 ) : (
                   <div className="coupon-row"><span>Have a coupon code?</span><b>View coupons</b></div>
                 )}
@@ -123,7 +131,7 @@ export function Checkout() {
                 <div><span>Without offer</span><i style={{ width: `${why.withoutRate * 100}%` }} /><span>{pctOf(why.withoutRate, 0)}</span></div>
                 <div><span>With {planOffer === 'none' ? 'no offer' : OFFER_BY_ID[planOffer].label}</span><i className="g" style={{ width: `${why.withRate * 100}%` }} /><span>{pctOf(why.withRate, 0)}</span></div>
               </div>
-              <p>Cost per order: {inr(why.costPerOrder)} · return {planOffer === 'none' ? '—' : xr(why.ret)} (break-even {xr(derived.breakEven)}).</p>
+              <p>Cost per order: {inr(why.costPerOrder)} · {RETURN_LABEL.toLowerCase()} {planOffer === 'none' ? '—' : xr(why.ret)} (break-even {xr(derived.breakEven)}).</p>
             </>
           )}
           <div className="dec"><span>Decision</span><OfferChip offer={d.offer} /></div>

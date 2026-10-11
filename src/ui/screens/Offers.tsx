@@ -5,6 +5,10 @@ import { EXISTING_CODES } from '../../data/fixtures';
 import { inr, inrSigned, num, xr } from '../../lib/format';
 import { Clover } from '../components/Icons';
 import { PageHeader } from '../components/kit';
+import { FEATURES } from '../../config/features';
+import { RETURN_LABEL } from '../../engine/net';
+import { PrepaidInsight } from '../components/PrepaidInsight';
+import { LeakRadar } from '../components/LeakRadar';
 
 export function Offers() {
   const { derived } = useModel();
@@ -21,15 +25,17 @@ export function Offers() {
         <span className="so-ic"><Clover /></span>
         <span className="so-body">
           <b>Smart Offers <span className="badge-new">New · AI agent</span></b>
-          <span>{approved ? `${killed ? 'Paused' : 'Live'} · day 20: ${inrSigned(derived.snapshots.day20.profit)} extra profit, return ${xr(derived.snapshots.day20.ret)}` : `ALPHA10 lost ${inr(Math.abs(derived.a10.profit))} last month. Replace it with offers that pay back, proven by a holdout.`}</span>
+          <span>{approved ? (FEATURES.netReturns ? (() => { const t = derived.snapshots[derived.today ?? 'day20']; return `${killed ? 'Paused' : 'Live'} · day ${t.days}: ${inrSigned(t.profit)} extra profit after returns, ${RETURN_LABEL.toLowerCase()} ${xr(t.ret)}`; })() : `${killed ? 'Paused' : 'Live'} · day 20: ${inrSigned(derived.snapshots.day20.profit)} extra profit, return ${xr(derived.snapshots.day20.ret)}`) : `ALPHA10 lost ${inr(Math.abs(derived.a10.profit))} last month. Replace it with offers that pay back, proven by a holdout.`}</span>
         </span>
         <span className="btn primary sm">{approved ? 'Open' : 'Set up'}</span>
       </button>
+      {FEATURES.paymentAware && <PrepaidInsight />}
+      {FEATURES.leakRadar && <LeakRadar />}
       <section className="card">
         <div className="sec-h pad-x"><h3>Coupons</h3><span className="muted small">last month (22 Aug – 20 Sep)</span></div>
         <div className="tbl-wrap">
           <table className="dtable">
-            <thead><tr><th>Code</th><th>Type</th><th>Where</th><th>Spend last month</th><th>Return</th><th>Status</th></tr></thead>
+            <thead><tr><th>Code</th><th>Type</th><th>Where</th><th>Spend last month</th><th>{RETURN_LABEL}</th><th>Status</th></tr></thead>
             <tbody>
               <tr className="row-link" onClick={() => nav('/ray?ask=Where did ALPHA10 go last month?')}>
                 <td><b>ALPHA10</b></td><td>{a10.value}% off, max ₹{a10.max_discount_inr}</td><td>{a10.where}</td><td>{inr(derived.a10.spend)}</td>

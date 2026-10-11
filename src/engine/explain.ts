@@ -7,9 +7,10 @@ import type { PlanRow } from './plan';
 
 const per100 = (x: number) => num(x * 100, 0);
 
-export function explainGroup(g: GroupStats, row: PlanRow, margin: number): string {
+/** margin = marginRate; kept = v2 share kept after returns (returns shown net of it; break-even = 1 / margin). */
+export function explainGroup(g: GroupStats, row: PlanRow, margin: number, kept = 1): string {
   const be = breakEven(margin);
-  const alts = candidateOffers(g).map((o) => perCheckout(g, o, margin));
+  const alts = candidateOffers(g).map((o) => perCheckout(g, o, margin, undefined, kept));
   const base = `${num(g.baseConversion * 100)} in 100 buy without an offer.`;
   if (row.offer === 'none') {
     const best = alts.sort((a, b) => b.profit - a.profit)[0];
@@ -19,7 +20,7 @@ export function explainGroup(g: GroupStats, row: PlanRow, margin: number): strin
     if (g.id === 'new_creator') return `${lead} Creator codes keep running and are tracked separately.`;
     return lead;
   }
-  const e = row.econ;
+  const e = perCheckout(g, row.offer, margin, row.econ.lift * 100, kept);
   const others = alts.filter((a) => a.offer !== row.offer && a.ret >= be);
   let why = `${base} ${OFFER_BY_ID[row.offer].label} adds ${num(e.lift * 100, 1)} buyers per 100, costs ${inr(roundHalfEven(e.spend * 100))} per 100 checkouts and returns ${xr(e.ret)} (break-even ${xr(be)}).`;
   for (const o of others) {

@@ -10,8 +10,9 @@ import { NEAR_BREAK_EVEN_BAND } from './guardrails';
 import { blendGroups, type Snapshot } from './measure';
 import { buildPlan, offerMap, type PlanSettings } from './plan';
 import { inr } from '../lib/format';
+import { RETURN_LABEL } from './net';
 
-export type ReviewAction = { type: 'override'; group: GroupId; offer: OfferId; from: OfferId } | { type: 'creator' };
+export type ReviewAction = { type: 'override'; group: GroupId; offer: OfferId; from: OfferId } | { type: 'creator' } | { type: 'learning'; key: string };
 /** No verdicts before this many days: avoids reacting to early noise. */
 export const MIN_DAYS_TO_DECIDE = 14;
 /** Beyond this, "days to prove" is not a useful number. */
@@ -19,7 +20,7 @@ const MAX_ETA_DAYS = 45;
 
 export type ReviewItem = {
   id: string;
-  kind: 'proven' | 'learning' | 'early' | 'watch' | 'switch' | 'no_lift' | 'creator' | 'festive' | 'budget' | 'control';
+  kind: 'proven' | 'learning' | 'early' | 'watch' | 'switch' | 'no_lift' | 'creator' | 'festive' | 'budget' | 'control' | 'experiment';
   group?: GroupId;
   title: string;
   detail: string;
@@ -69,9 +70,9 @@ export function buildReview(opts: {
     if (r.lift <= 0) {
       items.push({ id: `${id}-${r.group}`, kind: 'no_lift', group: r.group, title: `${name}: no lift yet`, detail: `${OFFER_BY_ID[offer].label} shows ${lift} pp so far (range ${lo} to ${hi}). Too early to stop; if it stays at zero by day 30 I'll suggest removing it.` });
     } else if (Math.abs(r.ret - be) <= NEAR_BREAK_EVEN_BAND && r.ret > 0) {
-      items.push({ id: `${id}-${r.group}`, kind: 'watch', group: r.group, title: `${name}: near break-even (${r.ret.toFixed(2)}x)`, detail: `Return is within ${NEAR_BREAK_EVEN_BAND}x of break-even (${be.toFixed(2)}x). If it stays below break-even for 7 days it steps down to the next cheaper offer automatically.` });
+      items.push({ id: `${id}-${r.group}`, kind: 'watch', group: r.group, title: `${name}: near break-even (${r.ret.toFixed(2)}x)`, detail: `${RETURN_LABEL} is within ${NEAR_BREAK_EVEN_BAND}x of break-even (${be.toFixed(2)}x). If it stays below break-even for 7 days it steps down to the next cheaper offer automatically.` });
     } else if (!r.stillLearning) {
-      items.push({ id: `${id}-${r.group}`, kind: 'proven', group: r.group, title: `${name}: proven, keep ${OFFER_BY_ID[offer].label}`, detail: `+${lift} pp more buyers than the holdout (90% range ${lo} to ${hi}), return ${r.ret.toFixed(2)}x.` });
+      items.push({ id: `${id}-${r.group}`, kind: 'proven', group: r.group, title: `${name}: proven, keep ${OFFER_BY_ID[offer].label}`, detail: `+${lift} pp more buyers than the holdout (90% range ${lo} to ${hi}), ${RETURN_LABEL.toLowerCase()} ${r.ret.toFixed(2)}x.` });
     } else {
       const eta = daysToProve(r.liftLow, r.lift, snap.days);
       const when = eta === null ? '' : eta <= MAX_ETA_DAYS ? ` At this rate about ${eta} more days to prove it.` : ' The group is small, so it needs more data than a month gives; I\'ll judge it on profit range at day 60.';

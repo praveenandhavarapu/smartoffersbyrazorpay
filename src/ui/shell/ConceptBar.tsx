@@ -3,6 +3,7 @@ import { useStore } from '../../state/store';
 import { useDemo } from '../components/demoStore';
 import { momentLabel } from '../../lib/dates';
 import { CONCEPT_LABEL } from '../components/bits';
+import { FEATURES } from '../../config/features';
 
 export function ConceptBar() {
   const moment = useStore((s) => s.moment);
@@ -10,7 +11,7 @@ export function ConceptBar() {
   const start = useDemo((s) => s.start);
   const open = useDemo((s) => s.open);
   return (
-    <footer className="concept-bar">
+    <footer className={`concept-bar ${FEATURES.tourV2 ? 'v2' : ''}`}>
       <span className="cb-label">{CONCEPT_LABEL}</span>
       <Link to="/about" className="cb-btn">About this concept</Link>
       <span className="cb-clock" title="The demo runs on fixed dates">Demo date: {momentLabel(moment)}</span>

@@ -1,0 +1,18 @@
+/**
+ * v2 feature flags (SMART_OFFERS_V2_BUILD_SPEC.md, golden rule 3). One boolean per phase.
+ * Switching a flag off brings back the v1 behaviour and copy for that phase.
+ */
+export const FEATURES = {
+  netReturns: true, // Phase 1: count returns and failed COD in profit; draft vs approved settings
+  heroMetric: true, // Phase 2: cost per extra order; "AI re-decides every night" framing
+  experiments: true, // Phase 3: Suggest → Test → Prove → Promote
+  playbook: true, // Phase 4: "Stores like yours"
+  discountBrain: true, // Phase 5: decisions served to other agents
+  paymentAware: true, // Phase 6: prepaid-only challenger + insight
+  rayV2: true, // Phase 7: Ray reads one engine snapshot; drafts with diff
+  aboutV2: true, // Phase 8: evidence and positioning on About
+  tourV2: true, // Phase 9: 14-step demo tour, controls bottom-left
+  leakRadar: true, // Phase 10 (stretch): public-code leak alert (built; switch off here if it misbehaves)
+} as const;
+
+export type FeatureName = keyof typeof FEATURES;

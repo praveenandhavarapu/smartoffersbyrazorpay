@@ -2,6 +2,7 @@
 import type { GroupStats } from '../data/types';
 import type { LiftTable } from '../data/network/peers';
 import type { Snapshot } from './measure';
+import { playbookFor } from '../data/network/playbook';
 
 export type AccuracyRow = {
   group: GroupStats['id']; offer: string; priorPp: number; poolLowPp: number | null; poolHighPp: number | null;
@@ -11,7 +12,8 @@ export type AccuracyRow = {
 export function accuracyRows(groups: GroupStats[], snap: Snapshot, p25: LiftTable, p75: LiftTable): AccuracyRow[] {
   return snap.rows.filter((r) => r.offer !== 'none').map((r) => {
     const g = groups.find((x) => x.id === r.group)!;
-    const prior = g.priorLiftsPp[r.offer] ?? 0;
+    // v2 variants (e.g. ₹150 off after a promotion) were estimated from the playbook before they ran.
+    const prior = g.priorLiftsPp[r.offer] ?? playbookFor(r.group, r.offer)?.medianLiftPp ?? 0;
     const lo = r.liftLow * 100, hi = r.liftHigh * 100;
     return {
       group: r.group, offer: r.offer, priorPp: prior, poolLowPp: p25[r.group]?.[r.offer] ?? null, poolHighPp: p75[r.group]?.[r.offer] ?? null,

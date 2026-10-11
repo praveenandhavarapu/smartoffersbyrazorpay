@@ -10,10 +10,12 @@ import { Check } from './Icons';
 import { DailyBars, MethodMix } from './charts';
 import { Status } from './kit';
 import { shortGroup } from './bits';
+import { FEATURES } from '../../config/features';
+import { RETURN_LABEL } from '../../engine/net';
 
 const COLORS: Record<string, string> = { new_ads_small: '#2a78d6', new_ads_big: '#86b6ef', new_organic: '#1baf7a', lapsed: '#eda100', returning: '#eb6834', new_creator: '#e87ba4' };
 
-/** "ALPHA10 lost you ₹33,845 last month" with where the money went, by group. */
+/** "ALPHA10 lost you ₹X last month" (engine value) with where the money went, by group. */
 export function WasteCard({ onFix }: { onFix: () => void }) {
   const { model, derived } = useModel();
   const [how, setHow] = useState(false);
@@ -21,7 +23,7 @@ export function WasteCard({ onFix }: { onFix: () => void }) {
   return (
     <div className="rcard insight">
       <h3>ALPHA10 lost you {inr(Math.abs(a.profit))} last month.</h3>
-      <p>It cost {inr(a.spend)} and brought {inr(a.extraSales)} of extra sales: {xr(a.ret)} against a {xr(derived.breakEven)} break-even at your {num(derived.margin * 100)}% margin.</p>
+      <p>It cost {inr(a.spend)} and brought {inr(a.extraSales)} of extra sales: {xr(a.ret)}{FEATURES.netReturns ? ' after returns' : ''} against a {xr(derived.breakEven)} break-even at your {num(derived.margin * 100)}% margin.</p>
       <div className="stack" role="img" aria-label="Where ALPHA10 spend went, by shopper group">
         {a.rows.map((r) => <i key={r.group} style={{ width: `${(r.spend / a.spend) * 100}%`, background: COLORS[r.group] }} />)}
       </div>
@@ -30,7 +32,7 @@ export function WasteCard({ onFix }: { onFix: () => void }) {
           <div key={r.group} style={{ borderColor: COLORS[r.group] }}>
             {shortGroup(model.groups.find((g) => g.id === r.group)!.label)}
             <b>{inr(r.spend)}</b>
-            <span className={r.ret < 1 ? 'bad' : ''}>{xr(r.ret)} return{r.ret < derived.breakEven ? ' · below break-even' : ''}</span>
+            <span className={r.ret < 1 ? 'bad' : ''}>{xr(r.ret)} {FEATURES.netReturns ? 'after returns' : 'return'}{r.ret < derived.breakEven ? ' · below break-even' : ''}</span>
           </div>
         ))}
       </div>
@@ -132,8 +134,8 @@ export function ResultsCard({ d }: { d: ReturnType<typeof tools.get_results> }) 
     <div className="rcard">
       <div className="rc-h"><span className="mono-tag green">Smart Offers · day {d.days}</span><button className="btn ghost sm" onClick={() => nav('/offers/smart')}>Full results →</button></div>
       <div className="rc-grid">
-        <div><span>Extra orders</span><b>{num(d.extra_orders, 1)}</b><em>range {num(d.extra_orders_range[0])}–{num(d.extra_orders_range[1])}</em></div>
-        <div><span>Return</span><b>{xr(d.return_x)}</b><em>{xr(d.return_range[0])}–{xr(d.return_range[1])}</em></div>
+        <div><span>Extra orders</span><b>{num(d.extra_orders)}</b><em>range {num(d.extra_orders_range[0])}–{num(d.extra_orders_range[1])}</em></div>
+        <div><span>{RETURN_LABEL}</span><b>{xr(d.return_x)}</b><em>{xr(d.return_range[0])}–{xr(d.return_range[1])}</em></div>
         <div><span>Extra profit</span><b>{inrSigned(d.profit)}</b></div>
         <div><span>Offer spend</span><b>{inr(d.spend)}</b></div>
       </div>
@@ -170,7 +172,7 @@ export function ApprovedCard() {
       </div>
       {moment === 'before'
         ? <button className="btn primary" onClick={() => { jump20(); nav('/offers/smart'); }}>Jump 20 days → results</button>
-        : <button className="btn secondary" onClick={() => nav('/offers/smart')}>Open results (day 20)</button>}
+        : <button className="btn secondary" onClick={() => nav('/offers/smart')}>Open results (day {derived.nowDay || 20})</button>}
     </div>
   );
 }
@@ -181,15 +183,15 @@ export function ImpactMini() {
   const nav = useNavigate();
   const approved = useStore((s) => s.approved);
   const moment = useStore((s) => s.moment);
-  const snap = moment === 'day30' ? derived.snapshots.day30 : derived.snapshots.day20;
+  const snap = FEATURES.netReturns ? derived.snapshots[derived.today ?? 'day20'] : moment === 'day30' ? derived.snapshots.day30 : derived.snapshots.day20;
   const live = approved && moment !== 'before';
   return (
     <div className="rcard">
       <div className="rc-h"><span className="mono-tag green">Impact</span><button className="btn ghost sm" onClick={() => nav('/studio/smart-offers?tab=impact')}>Full metrics →</button></div>
       <div className="rc-grid">
-        <div><span>North star: extra profit</span><b>{inrSigned(live ? (snap.profit * 30) / snap.days : derived.draft.profit)}</b><em>{live ? 'a month, vs holdout' : 'a month, planned'}</em></div>
-        <div><span>Return</span><b>{xr(live ? snap.ret : derived.draft.ret)}</b><em>break-even {xr(derived.breakEven)}</em></div>
-        <div><span>Extra orders</span><b>{live ? num((snap.extraOrders * 30) / snap.days) : num(derived.draft.extraOrders)}</b><em>a month</em></div>
+        <div><span>North star: extra profit{FEATURES.netReturns ? ' after returns' : ''}</span><b>{inrSigned(live ? (snap.profit * 30) / snap.days : FEATURES.netReturns ? derived.live.profit : derived.draft.profit)}</b><em>{live ? 'a month, vs holdout' : 'a month, planned'}</em></div>
+        <div><span>{RETURN_LABEL}</span><b>{xr(live ? snap.ret : FEATURES.netReturns ? derived.live.ret : derived.draft.ret)}</b><em>break-even {xr(derived.breakEven)}</em></div>
+        <div><span>Extra orders</span><b>{live ? num((snap.extraOrders * 30) / snap.days) : num(FEATURES.netReturns ? derived.live.extraOrders : derived.draft.extraOrders)}</b><em>a month</em></div>
         <div><span>Budget</span><b>{inr(derived.live.settings.budget)}</b><em>hard stop</em></div>
       </div>
     </div>

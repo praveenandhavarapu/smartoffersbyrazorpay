@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useModel } from '../../state/ModelContext';
 import { useStore } from '../../state/store';
 import { inr, inrSigned, xr } from '../../lib/format';
+import { FEATURES } from '../../config/features';
 
 const OTHER_AGENTS = [
   { name: 'Cart Abandonment', desc: 'Recovers dropped checkouts with reminders.', tag: 'Existing agent' },
@@ -24,13 +25,14 @@ export function Studio() {
           <button className="fcard agent me" onClick={() => nav('/studio/smart-offers')}>
             <div className="t"><span>Smart Offers Agent</span><b>{approved ? (killed ? 'paused' : 'running daily') : 'not installed'}</b></div>
             <div className="m"><strong>Pay for the sale, not the coupon.</strong> Picks an offer, or none, per shopper group within your budget; proves it with a holdout.</div>
-            <div className="m small-m">{approved ? `Day 20: ${inrSigned(derived.snapshots.day20.profit)} · ${xr(derived.snapshots.day20.ret)} · ${inr(derived.live.spend)}/mo budget use` : `Last month ALPHA10 returned ${xr(derived.a10.ret)}.`}</div>
+            <div className="m small-m">{approved ? (FEATURES.netReturns ? (() => { const t = derived.snapshots[derived.today ?? 'day20']; return `Day ${t.days}: ${inrSigned(t.profit)} after returns · ${xr(t.ret)} · ${inr(derived.live.spend)}/mo budget use`; })() : `Day 20: ${inrSigned(derived.snapshots.day20.profit)} · ${xr(derived.snapshots.day20.ret)} · ${inr(derived.live.spend)}/mo budget use`) : `Last month ALPHA10 returned ${xr(derived.a10.ret)}${FEATURES.netReturns ? ' after returns' : ''}.`}</div>
             <span className="btn primary sm">{approved ? 'Open agent' : 'Install'}</span>
           </button>
           {OTHER_AGENTS.map((a) => (
             <div key={a.name} className="fcard agent dim">
               <div className="t"><span>{a.name}</span><b>{a.tag}</b></div>
               <div className="m">{a.desc}</div>
+              {FEATURES.discountBrain && a.name === 'Cart Abandonment' && <span className="brain-badge">Asks Smart Offers before offering a discount (simulated)</span>}
               <div className="m small-m">Shown for context; not part of this concept.</div>
             </div>
           ))}

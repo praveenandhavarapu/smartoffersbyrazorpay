@@ -5,7 +5,7 @@ import { OFFER_BY_ID } from '../../data/fixtures';
 export const CONCEPT_LABEL = 'Concept prototype for the Razorpay × ISB Build Challenge. Not a Razorpay product. All data is synthetic.';
 
 export function OfferChip({ offer, muted }: { offer: OfferId; muted?: boolean }) {
-  const cls = offer === 'none' ? 'offer none' : offer === 'free_shipping' ? 'offer fs' : 'offer';
+  const cls = offer === 'none' ? 'offer none' : offer.startsWith('free_shipping') ? 'offer fs' : 'offer';
   return <span className={cls} style={muted ? { opacity: 0.6 } : undefined}>{OFFER_BY_ID[offer].label}</span>;
 }
 

@@ -47,6 +47,9 @@ export function eligible(offer: OfferId, cartInr: number): boolean {
   if (offer === 'free_shipping') return cartInr < PROFILE.freeShippingThresholdInr;
   if (offer === 'flat_100') return cartInr >= 999;
   if (offer === 'flat_200') return cartInr >= 1500;
+  if (offer === 'flat_150') return cartInr >= 1500;
+  if (offer === 'free_shipping_999') return cartInr >= 999 && cartInr < PROFILE.freeShippingThresholdInr;
+  if (offer === 'free_shipping_prepaid') return cartInr < PROFILE.freeShippingThresholdInr;
   return true;
 }
 
@@ -67,13 +70,13 @@ export function decide(table: CheckoutTable, s: Shopper): CheckoutDecision {
   const offer = table.offers[group];
   if (offer === 'none') return { ...base, offer, holdout: false, savingInr: 0, reason: 'No offer for this group: an offer would not pay back.' };
   if (!eligible(offer, cartInr)) return { ...base, offer: 'none', holdout: false, savingInr: 0, reason: `${OFFER_BY_ID[offer].label} needs ${OFFER_BY_ID[offer].eligibleIf}; this cart does not qualify.` };
-  const saving = offer === 'free_shipping' ? shipping : OFFER_BY_ID[offer].costPerOrderInr;
+  const saving = offer === 'free_shipping' || offer === 'free_shipping_999' || offer === 'free_shipping_prepaid' ? shipping : OFFER_BY_ID[offer].costPerOrderInr;
   return { ...base, offer, holdout: false, savingInr: saving, reason: `Group plan: ${OFFER_BY_ID[offer].label}.` };
 }
 
 /** Numbers for the "Why" panel. */
-export function whyNumbers(g: GroupStats, offer: OfferId, margin: number) {
-  const e = perCheckout(g, offer, margin);
+export function whyNumbers(g: GroupStats, offer: OfferId, margin: number, kept = 1) {
+  const e = perCheckout(g, offer, margin, undefined, kept);
   return { withoutRate: g.baseConversion, withRate: offer === 'none' ? g.baseConversion : e.p, costPerOrder: OFFER_BY_ID[offer].costPerOrderInr, ret: e.ret };
 }
 

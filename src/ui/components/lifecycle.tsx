@@ -13,6 +13,10 @@ import { Alert as AlertIcon, Check, X } from './Icons';
 import { Drawer } from './kit';
 import { OfferChip, shortGroup } from './bits';
 import type { Snapshot } from '../../engine/measure';
+import { FEATURES } from '../../config/features';
+import { RETURN_LABEL } from '../../engine/net';
+import { groupLabel, offerLabel } from '../../lib/labels';
+import { AI_NIGHTLY, HowAIWorks } from './HowAIWorks';
 
 /** 🔔 in the top bar: opportunities and lifecycle prompts. */
 export function NotificationsBell() {
@@ -69,7 +73,48 @@ export function OpportunityPanel({ compact }: { compact?: boolean }) {
 }
 
 /** Blanket code vs simple rule vs Smart Offers, plus what the AI does that a rule can't. */
-export function WhyAI() {
+export function WhyAI({ which }: { which?: 'draft' | 'live' }) {
+  const { model, derived } = useModel();
+  const approved = useStore((s) => s.approved);
+  if (!FEATURES.netReturns) return <WhyAIv1 />;
+  const w = which ?? (approved ? 'live' : 'draft');
+  const cmp = w === 'live' ? derived.comparison : derived.draftComparison;
+  const por = w === 'live' ? derived.profitOverRatio : derived.draftProfitOverRatio;
+  const max = Math.max(...cmp.rows.map((s) => Math.abs(s.profit)), 1);
+  const capped = cmp.rows.filter((r) => r.capped);
+  return (
+    <div className="rcard why-ai">
+      <div className="rc-h"><span className="mono-tag">Why AI, not a fixed rule</span><span className="muted small">same {num(cmp.coverage * 100)}% of shoppers, same {inr(cmp.budget)} budget, after returns, per month</span></div>
+      <div className="strat">
+        {cmp.rows.map((s) => (
+          <div key={s.id} className={`strat-row ${s.id}`}>
+            <span className="strat-l">{s.label}</span>
+            <span className="strat-bar"><i className={s.profit < 0 ? 'neg' : 'pos'} style={{ width: `${(Math.abs(s.profit) / max) * 100}%` }} /></span>
+            <b className={s.profit < 0 ? 'bad' : 'good'}>{inrSigned(s.profit)}</b>
+          </div>
+        ))}
+      </div>
+      {capped.length > 0 && <p className="small muted">{capped.map((r) => r.id === 'blanket' ? 'ALPHA10' : 'The rule').join(' and ')} would overspend, so {capped.length > 1 ? 'they are' : 'it is'} capped at your budget: when it runs out, offers stop for the rest of the month.</p>}
+      {cmp.verdict === 'ai_wins' ? (
+        <ol className="why-list">
+          <li><b>Starts smart on day one.</b> A rule needs history this store doesn't have. Smart Offers borrows offer-test results from {num(model.pool.size)} similar stores (averages only) to estimate each group's lift.</li>
+          {por && <li><b>Chooses for profit, not for a ratio.</b> {groupLabel(por.group)} get {offerLabel(por.offer)} at {xr(por.ret)} although {offerLabel(por.alt)} returns more per rupee ({xr(por.altRet)}), because {offerLabel(por.offer)} makes {inr(por.extraProfitMonth)} more a month. A rule can't make that trade-off per group.</li>}
+          <li><b>Learns this store's own truth.</b> A {model.profile.holdoutPct}% holdout measures real lift; each week the plan leans more on measured results (trust weight) and less on borrowed ones.</li>
+          <li><b>Adapts every week.</b> The Monday review re-plans with what was learned and asks you to approve changes. A rule stays wrong until someone notices.</li>
+        </ol>
+      ) : (
+        <p className="small"><b>{cmp.verdict === 'tie' ? 'At your margin a simple rule does about as well.' : 'At your margin a simple rule does as well or better on paper.'}</b> Smart Offers still adds: proof via the holdout, weekly re-testing, and stopping offers that stop paying.</p>
+      )}
+      {FEATURES.heroMetric ? <>
+        <HowAIWorks compact />
+        <p className="small muted">{AI_NIGHTLY} No AI model sits in the payment path.</p>
+      </> : <p className="small muted">The language model (Ray) only explains and drafts. Checkout decisions come from a precomputed table, so AI never sits in the payment path.</p>}
+    </div>
+  );
+}
+
+/** v1 version, kept for the netReturns flag off. */
+function WhyAIv1() {
   const { model, derived } = useModel();
   const max = Math.max(...derived.strategies.map((s) => Math.abs(s.profit)), 1);
   const big = derived.draft.rows.find((r) => r.group === 'new_ads_big');
@@ -89,7 +134,7 @@ export function WhyAI() {
       </div>
       <ol className="why-list">
         <li><b>Starts smart on day one.</b> A rule needs history this store doesn't have. Smart Offers borrows offer-test results from {num(model.pool.size)} similar stores (averages only) to estimate each group's lift.</li>
-        <li><b>Chooses for profit, not for a ratio.</b> Big new carts get ₹200 off at {big ? xr(big.ret) : '—'} although ₹100 off returns more per rupee, because ₹200 makes {alt100 !== null && big ? inr(big.profit - alt100) : 'more'} more a month. A rule can't make that trade-off per group.</li>
+        {big && big.offer === 'flat_200' && <li><b>Chooses for profit, not for a ratio.</b> Big new carts get ₹200 off at {xr(big.ret)} although ₹100 off returns more per rupee, because ₹200 makes {alt100 !== null ? inr(big.profit - alt100) : 'more'} more a month. A rule can't make that trade-off per group.</li>}
         <li><b>Learns this store's own truth.</b> A 10% holdout measures real lift; each week the plan leans more on measured results (trust weight) and less on borrowed ones.</li>
         <li><b>Adapts every week.</b> The Monday review re-plans with what was learned and asks you to approve changes. A rule stays wrong until someone notices.</li>
       </ol>
@@ -99,7 +144,7 @@ export function WhyAI() {
 }
 
 function ItemIcon({ kind }: { kind: ReviewItem['kind'] }) {
-  const map: Record<ReviewItem['kind'], string> = { proven: '✓', learning: '…', early: '◷', watch: '!', switch: '⇄', no_lift: '∅', creator: '%', festive: '★', budget: '₹', control: '=' };
+  const map: Record<ReviewItem['kind'], string> = { proven: '✓', learning: '…', early: '◷', watch: '!', switch: '⇄', no_lift: '∅', creator: '%', festive: '★', budget: '₹', control: '=', experiment: '⟳' };
   return <span className={`ri-ic ${kind}`} aria-hidden="true">{map[kind]}</span>;
 }
 
@@ -109,13 +154,15 @@ export function ReviewCard({ review, open: startOpen = true }: { review: WeeklyR
   const decide = useStore((s) => s.decideReview);
   const applyOverride = useStore((s) => s.applyOverride);
   const setCreatorFix = useStore((s) => s.setCreatorFix);
+  const decideLearning = useStore((s) => s.decideLearning);
   const openReview = useStore((s) => s.openReview);
   const [open, setOpen] = useState(startOpen);
   const pending = review.items.filter((i) => i.action && !decisions[i.id]);
   const approve = (i: ReviewItem) => {
     if (i.action?.type === 'override') applyOverride(i.action.group, i.action.offer, i.action.from, `Week ${review.week} review: ${OFFER_BY_ID[i.action.offer].label}`);
     if (i.action?.type === 'creator') setCreatorFix('limited');
-    decide(i.id, 'approved', i.title);
+    if (i.action?.type === 'learning') decideLearning(i.action.key, 'approved', i.title);
+    decide(i.id, 'approved', i.title, i.action?.type === 'learning');
   };
   return (
     <div className="rcard review" onMouseEnter={() => openReview(review.id)} onFocus={() => openReview(review.id)}>
@@ -133,7 +180,7 @@ export function ReviewCard({ review, open: startOpen = true }: { review: WeeklyR
               <ItemIcon kind={i.kind} />
               <div><b>{i.title}</b><p>{i.detail}</p></div>
               {i.action && (decisions[i.id] ? <span className={`status ${decisions[i.id] === 'approved' ? 'ok' : ''}`}>{decisions[i.id]}</span> : (
-                <div className="btns"><button className="btn primary sm" onClick={() => approve(i)}>Approve</button><button className="btn secondary sm" onClick={() => { if (i.action?.type === 'creator') setCreatorFix('kept'); decide(i.id, 'dismissed', i.title); }}>Keep as is</button></div>
+                <div className="btns"><button className="btn primary sm" onClick={() => approve(i)}>Approve</button><button className="btn secondary sm" onClick={() => { if (i.action?.type === 'creator') setCreatorFix('kept'); if (i.action?.type === 'learning') decideLearning(i.action.key, 'declined', i.title); decide(i.id, 'dismissed', i.title, i.action?.type === 'learning'); }}>Keep as is</button></div>
               ))}
             </div>
           ))}
@@ -190,15 +237,17 @@ export function PilotDecisionCard() {
   const jump30 = useStore((s) => s.jump30);
   const p = derived.pilot;
   const due = moment === 'day30';
-  const verdict = p.verdict === 'profitable_proven' ? 'Profitable even at the low end of the range.' : p.verdict === 'orders_proven' ? 'Extra orders are proven. Profit is likely but its range still dips below break-even.' : 'Not proven yet.';
+  const verdict = p.verdict === 'profitable_proven' ? 'Profitable even at the low end of the range.'
+    : FEATURES.netReturns && p.verdict === 'orders_proven' && p.expectedProfitMonth < 0 ? 'Extra orders are proven, but after returns at your margin the expected profit is below zero. Change offers or margin before keeping it.'
+    : p.verdict === 'orders_proven' ? 'Extra orders are proven. Profit is likely but its range still dips below break-even.' : 'Not proven yet.';
   return (
     <div className={`rcard decision ${due ? 'due' : ''}`}>
       <div className="rc-h"><span className={`mono-tag ${due ? 'green' : ''}`}>{due ? 'Pilot ended · your decision' : `Pilot ends ${fmtDate(derived.pilotEndDate, false)} · ${derived.daysLeft} days left`}</span>{!due && <button className="btn ghost sm" onClick={jump30}>Jump to day 30 →</button>}</div>
       <h3>{due ? 'Keep Smart Offers?' : 'What you will decide on day 30'}</h3>
       <div className="rc-grid">
-        <div><span>Expected extra profit</span><b>{inrSigned(p.expectedProfitMonth)}</b><em>a month</em></div>
+        <div><span>Expected extra profit{FEATURES.netReturns ? ' after returns' : ''}</span><b>{inrSigned(p.expectedProfitMonth)}</b><em>a month</em></div>
         <div><span>Extra orders (30 days)</span><b>{num(p.extraOrders, 0)}</b><em>proven at least {num(p.extraOrdersLow)}</em></div>
-        <div><span>Return</span><b>{xr(p.ret)}</b><em>range {xr(p.retLow)}–{xr(p.retHigh)}</em></div>
+        <div><span>{RETURN_LABEL}</span><b>{xr(p.ret)}</b><em>range {xr(p.retLow)}–{xr(p.retHigh)} · break-even {xr(derived.breakEven)}</em></div>
         <div><span>Fee if billed</span><b>{inr(p.fee.fee)}</b><em>1% of proven sales, capped</em></div>
       </div>
       <p className="small">{verdict} The fee only counts the proven lower bound ({num(p.fee.provenExtraOrders)} orders × {inr(p.fee.avgExtraOrderValue)}).</p>
@@ -262,10 +311,13 @@ export function StopButton({ label = 'Stop Smart Offers', className = 'btn secon
   );
 }
 
-/** "Proof costs ₹2,350 a month" framing for the 10% holdout. */
-export function HoldoutNote() {
-  const { derived } = useModel();
-  return <p className="plan-note">The 10% holdout costs about <b>{inr(derived.holdoutCostMonth)}</b> a month in missed extra profit. That's the price of proof: without it, last month's <b>{inr(derived.a10.spend)}</b> of ALPHA10 discounts was a guess.</p>;
+/** "Proof costs ₹X a month" framing for the holdout (cost of the plan being shown: draft or live). */
+export function HoldoutNote({ which }: { which?: 'draft' | 'live' }) {
+  const { model, derived } = useModel();
+  const approved = useStore((s) => s.approved);
+  const w = which ?? (approved ? 'live' : 'draft');
+  const cost = FEATURES.netReturns && w === 'live' ? derived.holdoutCostMonthLive : derived.holdoutCostMonth;
+  return <p className="plan-note">The {model.profile.holdoutPct}% holdout costs about <b>{inr(cost)}</b> a month in missed extra profit. That's the price of proof: without it, last month's <b>{inr(derived.a10.spend)}</b> of ALPHA10 discounts was a guess.</p>;
 }
 
 /** Shown on payments pages when the demo date is past the end of the synthetic payments data. */
