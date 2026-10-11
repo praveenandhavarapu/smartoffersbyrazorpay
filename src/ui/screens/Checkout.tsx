@@ -29,6 +29,7 @@ export function Checkout() {
   const { model, derived } = useModel();
   const approved = useStore((s) => s.approved);
   const killed = useStore((s) => s.killed);
+  const alpha10Restored = useStore((s) => s.alpha10Restored);
   const outage = useStore((s) => s.outage);
   const setOutage = useStore((s) => s.setOutage);
   const shopperId = useDemo((s) => s.shopperId);
@@ -59,6 +60,7 @@ export function Checkout() {
   return (
     <div className="frame plain checkout-screen">
       {!approved && <Banner>Showing the default plan (not yet approved).</Banner>}
+      {alpha10Restored && <Banner tone="warn">Smart Offers is stopped and ALPHA10 is back for everyone, so shoppers see the coupon field instead of a group offer.</Banner>}
       <div className="co-head">
         <MonoTag>Checkout simulator · Magic Checkout-style sheet</MonoTag>
         <h2>Same store, different shoppers, different offers</h2>

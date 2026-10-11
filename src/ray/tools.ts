@@ -18,6 +18,7 @@ import { toPlanSettings } from '../state/derived';
 import type { ToolName } from './toolSchemas';
 import { dailySeries, lastDays, paymentSummary, settlementSummary, unsettledBalance, inRange, type InstantSettlement, type LedgerView } from '../data/ledgerQueries';
 import { fmtDate } from '../lib/dates';
+import { accuracyRows, accuracySummary } from '../engine/accuracy';
 
 const rupees = (p: number) => roundHalfEven(p / 100);
 const dateOf = (t: number) => fmtDate(new Date((t + 19800) * 1000).toISOString().slice(0, 10));
@@ -176,6 +177,41 @@ export const tools = {
       ? { ok: true, pool_size: b.poolSize, median_lift_pp: b.medianLiftPp, typical_range_pp: [b.p25LiftPp, b.p75LiftPp], group: a.group_id, offer: a.offer_id }
       : { ok: false, reason: b.reason };
   },
+  get_opportunities(ctx: RayCtx) {
+    return { signals: ctx.derived.signals, eligibility: ctx.derived.eligibility, alerts: ctx.derived.alerts.map((a) => ({ title: a.title, detail: a.detail })) };
+  },
+  get_weekly_review(ctx: RayCtx) {
+    const r = ctx.derived.reviews[0];
+    if (!r) return { available: false, reason: ctx.approved ? 'The first review is one week after go-live.' : 'Smart Offers is not live yet.' };
+    return { available: true, week: r.week, date: fmtDate(r.date), data_days: r.dataDays, items: r.items.map((i) => ({ status: i.kind, title: i.title, detail: i.detail, needs_approval: Boolean(i.action) })), next_review: ctx.derived.nextReview ? fmtDate(ctx.derived.nextReview) : null };
+  },
+  get_prediction_accuracy(ctx: RayCtx) {
+    const snap = ctx.derived.daysLeft === 0 ? ctx.derived.snapshots.day30 : ctx.derived.snapshots.day20;
+    const rows = accuracyRows(ctx.model.groups, snap, ctx.model.pool.p25, ctx.model.pool.p75);
+    const s = accuracySummary(rows);
+    return { day: snap.days, inside_range: s.inside, total: s.total, median_error_pp: O(s.medianAbsErrorPp), groups: rows.map((r) => ({ group: label(ctx.model, r.group), estimate_pp: O(r.priorPp), measured_pp: O(r.measuredPp), range_pp: [O(r.lowPp), O(r.highPp)], inside: r.inside })) };
+  },
+  get_pilot_decision(ctx: RayCtx) {
+    const p = ctx.derived.pilot;
+    return { pilot_day: p.days, days_left: ctx.derived.daysLeft, expected_profit_month: M(p.expectedProfitMonth), extra_orders: O(p.extraOrders), proven_extra_orders_at_least: M(p.extraOrdersLow), return_x: R(p.ret), return_range: [R(p.retLow), R(p.retHigh)], fee: M(p.fee.fee), fee_rule: '1% of proven extra sales, capped at 20% of extra profit', verdict: p.verdict };
+  },
+  get_impact_summary(ctx: RayCtx) {
+    const live = ctx.approved;
+    const snap = ctx.derived.daysLeft === 0 ? ctx.derived.snapshots.day30 : ctx.derived.snapshots.day20;
+    const acc = accuracySummary(accuracyRows(ctx.model.groups, snap, ctx.model.pool.p25, ctx.model.pool.p75));
+    return {
+      north_star: live ? { metric: 'extra profit vs holdout, per month', value: M((snap.profit * 30) / snap.days) } : { metric: 'planned extra profit per month', value: M(ctx.derived.draft.profit) },
+      return_x: live ? R(snap.ret) : R(ctx.derived.draft.ret), break_even_x: R(ctx.derived.breakEven),
+      estimates_inside_range: live ? `${acc.inside} of ${acc.total}` : null, budget: ctx.derived.live.settings.budget,
+    };
+  },
+  get_next_experiments(ctx: RayCtx) {
+    return { experiments: ctx.derived.experiments.map((e) => ({ title: e.title, why: e.why, test: e.design, success_metric: e.metric })) };
+  },
+  get_why_ai(ctx: RayCtx) {
+    return { same_shoppers_monthly_profit: ctx.derived.strategies.map((x) => ({ option: x.label, profit: M(x.profit) })), similar_stores: ctx.model.pool.size,
+      capabilities: ['Estimates each group\'s lift from similar stores before the store has data', 'Chooses per group for profit, not ratio', 'Learns from a 10% holdout and leans on measured results over time', 'Re-plans every week; the merchant approves changes'] };
+  },
   request_pause(_ctx: RayCtx, a: { scope: string }): { draft: Draft; requires_approval: true } {
     return { draft: { type: 'pause', scope: isGroupId(a.scope) ? a.scope : 'all' }, requires_approval: true };
   },
@@ -219,6 +255,13 @@ export function runTool(ctx: RayCtx, name: string, args: Record<string, unknown>
     case 'get_peer_benchmark':
       if (!isGroupId(a.group_id) || !isOfferId(a.offer_id)) return { ok: false, reason: 'Unknown group or offer.' };
       return tools.get_peer_benchmark(ctx, { group_id: a.group_id, offer_id: a.offer_id });
+    case 'get_opportunities': return tools.get_opportunities(ctx);
+    case 'get_weekly_review': return tools.get_weekly_review(ctx);
+    case 'get_prediction_accuracy': return tools.get_prediction_accuracy(ctx);
+    case 'get_pilot_decision': return tools.get_pilot_decision(ctx);
+    case 'get_impact_summary': return tools.get_impact_summary(ctx);
+    case 'get_next_experiments': return tools.get_next_experiments(ctx);
+    case 'get_why_ai': return tools.get_why_ai(ctx);
     case 'request_pause': return tools.request_pause(ctx, { scope: String(a.scope ?? 'all') });
     default: return { error: `Unknown tool ${name}.` };
   }

@@ -1,5 +1,7 @@
 import { route } from '../demoRouter';
 import { parseAnswer } from '../setupFlow';
+import { derive } from '../../state/derived';
+import { DEFAULT_USER_SETTINGS } from '../../state/store';
 import { tools, type RayCtx } from '../tools';
 import { testCtx } from '../../test/ctx';
 import { generateNetwork } from '../../data/generator/network';
@@ -154,5 +156,35 @@ describe('guided setup', () => {
     expect(parseAnswer('goal', 'Most new customers')).toEqual({ ok: true, patch: { goal: 'new_customers' } });
     expect(parseAnswer('rules', 'Yes')).toEqual({ ok: true, patch: { festiveWindow: true } });
     expect(parseAnswer('rules', 'maybe').ok).toBe(false);
+  });
+});
+
+describe('lifecycle questions (demo mode)', () => {
+  const liveCtx = () => {
+    const d = derive(ctx.model, { settings: DEFAULT_USER_SETTINGS, approved: true, approvedSettings: DEFAULT_USER_SETTINGS, overrides: {}, killed: false, moment: 'day20', creatorFix: 'pending' });
+    return { ...ctx, derived: d, approved: true };
+  };
+  it('why AI compares blanket, rule and Smart Offers on the same shoppers', () => {
+    const r = route('Why AI, not a simple rule?', ctx);
+    expect(r.intent).toBe('why_ai');
+    expect(r.text).toContain('+₹21,147');
+    expect(r.text).toContain('+₹5,076');
+  });
+  it('opportunities list breached signals', () => {
+    const r = route('Anything I should fix?', ctx);
+    expect(r.intent).toBe('opportunities');
+    expect(r.text).toMatch(/2\.05x/);
+  });
+  it('weekly review, accuracy, pilot decision, impact and experiments', () => {
+    const c = liveCtx();
+    expect(route('What changed this week?', c).intent).toBe('weekly_review');
+    expect(route('What changed this week?', c).text).toMatch(/Week 2 review/);
+    expect(route('How accurate were your estimates?', c).text).toMatch(/of 4/);
+    expect(route('Should I keep Smart Offers after the pilot?', c).text).toMatch(/10 days/);
+    expect(route('What is my impact?', c).intent).toBe('impact');
+    expect(route('What should I try next?', c).intent).toBe('experiments');
+  });
+  it('before go-live, lifecycle questions say what happens when', () => {
+    expect(route('What changed this week?', ctx).text).toMatch(/No weekly review yet/);
   });
 });

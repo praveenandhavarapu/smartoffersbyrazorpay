@@ -6,7 +6,9 @@ import { AFTER_DELIVERY, OFFER_BY_ID } from '../../data/fixtures';
 import { NEW_GROUPS } from '../../data/types';
 import { explainGroup } from '../../engine/explain';
 import { inr, inrSigned, num, pctOf, pp, xr } from '../../lib/format';
-import { DEMO_DATES, fmtDate } from '../../lib/dates';
+import { fmtDate, pilotDayDate } from '../../lib/dates';
+import { SNAP_DAYS } from '../../state/derived';
+import { AccuracyTable, HoldoutNote, PilotDecisionCard } from '../components/lifecycle';
 import { Alert, Clover, Power } from '../components/Icons';
 import { useNavigate } from 'react-router-dom';
 import { useChat } from '../../ray/chatStore';
@@ -33,6 +35,9 @@ export function Results() {
   const be = derived.breakEven;
   const budget = derived.live.settings.budget;
   const pilotDays = 30;
+  const alpha10Restored = useStore((x) => x.alpha10Restored);
+  const moment = useStore((x) => x.moment);
+  const nowDay = moment === 'day30' ? 30 : 20;
   const label = (g: string) => model.groups.find((x) => x.id === g)!.label;
 
   // Display-only: share of extra sales kept after failed COD and returns.
@@ -53,14 +58,20 @@ export function Results() {
         <h2><span className="clover"><Clover /></span>Smart Offers · {killed ? 'Paused' : 'Live'} · day {s.days}{s.days <= pilotDays ? ` of ${pilotDays} · Free pilot` : ' · after pilot'}</h2>
         <span className="sp" />
         <div className="seg sm" role="tablist" aria-label="Snapshot">
-          {(['day20', 'day60'] as const).map((k) => <button key={k} role="tab" aria-selected={snapshot === k} className={snapshot === k ? 'on' : ''} onClick={() => setSnapshot(k)}>{k === 'day20' ? 'Day 20' : 'Day 60'} · {fmtDate(DEMO_DATES[k], false)}</button>)}
+          {(['day7', 'day14', 'day20', 'day30', 'day60'] as const).map((k) => {
+            const d = SNAP_DAYS[k];
+            const future = d > nowDay;
+            return <button key={k} role="tab" aria-selected={snapshot === k} className={snapshot === k ? 'on' : ''} onClick={() => setSnapshot(k)} title={future ? 'Projection from the count formulas' : fmtDate(pilotDayDate(d))}>Day {d}{future ? ' (proj.)' : ''}</button>;
+          })}
         </div>
         {killed ? <button className="btn primary sm" onClick={resume}>Resume</button> : <button className="btn danger sm" onClick={kill}><Power width={14} /> Kill switch</button>}
       </div>
       <div className="res-main">
         {!approved && <Banner>Showing the default plan (not yet approved).</Banner>}
         {approved && derived.approvedDiffersFromPilot && <Banner>Your approved plan differs from the default; the synthetic pilot data was generated for the default plan, so results below measure that plan.</Banner>}
-        {killed && <Banner tone="warn">Kill switch on: every group sees no offer. Shoppers get the store's default checkout. Logged in the audit log.</Banner>}
+        {killed && <Banner tone="warn">{alpha10Restored ? 'Smart Offers stopped and ALPHA10 restored for everyone.' : 'Kill switch on: every group sees no offer. Shoppers get the store\'s default checkout.'} Logged in the audit log.</Banner>}
+        {SNAP_DAYS[snapshot] > nowDay && <Banner>Day {s.days} is a projection from today's measured rates, not measured data.</Banner>}
+        {approved && <PilotDecisionCard />}
 
         <div className="k4">
           <Kpi label="Offer spend" value={inr(s.spend)} sub={<>budget pace {inr(s.budgetPace)} · <span>{inr(budget)}/mo</span></>} />
@@ -89,6 +100,9 @@ export function Results() {
             <p className="small muted">No-offer groups are a control check: no difference expected. Trust = how much decisions lean on this store's own results vs similar stores (holdout ÷ (holdout + 300)).</p>
           </div>
         </section>
+
+        <AccuracyTable snap={s} />
+        <HoldoutNote />
 
         <section className="panel">
           <div className="panel-h"><h4>By group</h4><span className="muted small">Override any row; cost is shown before you apply.</span></div>

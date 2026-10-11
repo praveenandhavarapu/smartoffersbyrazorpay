@@ -29,6 +29,13 @@ function cardsFromCalls(calls: ToolCall[]): { cards: RayCard[]; quick: QuickRepl
       case 'get_offer_waste': byKind.set('waste', { kind: 'waste' }); quick = FOLLOW_UPS.offers; break;
       case 'get_results': byKind.set('results', { kind: 'results', data: r as never }); quick = FOLLOW_UPS.results; break;
       case 'get_creator_code_report': byKind.set('creators', { kind: 'creators' }); quick = FOLLOW_UPS.offers; break;
+      case 'get_opportunities': byKind.set('opportunities', { kind: 'opportunities' }); quick = FOLLOW_UPS.offers; break;
+      case 'get_why_ai': byKind.set('why_ai', { kind: 'why_ai' }); quick = FOLLOW_UPS.offers; break;
+      case 'get_weekly_review': if ((r as { available?: boolean }).available) byKind.set('review', { kind: 'review' }); quick = FOLLOW_UPS.results; break;
+      case 'get_prediction_accuracy': byKind.set('accuracy', { kind: 'accuracy' }); quick = FOLLOW_UPS.results; break;
+      case 'get_pilot_decision': byKind.set('decision', { kind: 'decision' }); quick = FOLLOW_UPS.results; break;
+      case 'get_impact_summary': byKind.set('impact', { kind: 'impact' }); quick = FOLLOW_UPS.results; break;
+      case 'get_next_experiments': byKind.set('experiments', { kind: 'experiments' }); quick = FOLLOW_UPS.results; break;
       case 'draft_plan_change': case 'request_pause': { const d = (r as { draft?: Draft }).draft; if (d) byKind.set('draft', { kind: 'draft', draft: d }); break; }
       default: break;
     }

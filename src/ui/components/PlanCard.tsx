@@ -5,6 +5,7 @@ import { inr, inrSigned, num, pctSigned, xr } from '../../lib/format';
 import { explainGroup } from '../../engine/explain';
 import { Check, Shield } from './Icons';
 import { OfferChip, shortGroup } from './bits';
+import { HoldoutNote } from './lifecycle';
 
 export function PlanCard({ onAsk }: { onAsk?: (q: string) => void }) {
   const { model, derived } = useModel();
@@ -63,6 +64,7 @@ export function PlanCard({ onAsk }: { onAsk?: (q: string) => void }) {
         <div><div className="s">Extra profit / month</div><div className="v good">{inrSigned(p.profit)}</div><div className="s">ALPHA10 today: {inrSigned(derived.a10AtMargin.profit)}</div></div>
       </div>
       <p className="plan-note">Orders per month: {num(p.orders)} ({pctSigned(p.ordersChangePct)} vs today's {num(derived.storeOrders.today)}). Offers you stop were mostly paying buyers who'd buy anyway.</p>
+      <HoldoutNote />
       <div className="guards">
         {['Max ₹250 off per order', 'One offer per order', `Budget hard stop ${inr(settings.budget)}`, '10% holdout gets no offer', settings.festiveWindow ? "No offers on Festive Drop '26 (7 days)" : 'No festive window', 'Creator codes: report only'].map((g) => (
           <span key={g} className="guard"><Shield />{g}</span>

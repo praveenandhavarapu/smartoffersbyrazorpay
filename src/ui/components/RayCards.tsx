@@ -174,3 +174,24 @@ export function ApprovedCard() {
     </div>
   );
 }
+
+/** Compact impact summary for the chat; full view is Agent Studio → Impact. */
+export function ImpactMini() {
+  const { derived } = useModel();
+  const nav = useNavigate();
+  const approved = useStore((s) => s.approved);
+  const moment = useStore((s) => s.moment);
+  const snap = moment === 'day30' ? derived.snapshots.day30 : derived.snapshots.day20;
+  const live = approved && moment !== 'before';
+  return (
+    <div className="rcard">
+      <div className="rc-h"><span className="mono-tag green">Impact</span><button className="btn ghost sm" onClick={() => nav('/studio/smart-offers?tab=impact')}>Full metrics →</button></div>
+      <div className="rc-grid">
+        <div><span>North star: extra profit</span><b>{inrSigned(live ? (snap.profit * 30) / snap.days : derived.draft.profit)}</b><em>{live ? 'a month, vs holdout' : 'a month, planned'}</em></div>
+        <div><span>Return</span><b>{xr(live ? snap.ret : derived.draft.ret)}</b><em>break-even {xr(derived.breakEven)}</em></div>
+        <div><span>Extra orders</span><b>{live ? num((snap.extraOrders * 30) / snap.days) : num(derived.draft.extraOrders)}</b><em>a month</em></div>
+        <div><span>Budget</span><b>{inr(derived.live.settings.budget)}</b><em>hard stop</em></div>
+      </div>
+    </div>
+  );
+}
