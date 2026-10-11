@@ -14,6 +14,7 @@ import { ImpactMini } from './RayCards';
 import { OfferChip, shortGroup } from './bits';
 import { PlanCard } from './PlanCard';
 import { ApprovedCard, CreatorsCard, DailyCard, PaymentsCard, PaymentsListCard, RefundsCard, ResultsCard, SettlementsCard, WasteCard } from './RayCards';
+import { FEATURES } from '../../config/features';
 
 /** Live/Demo switch. Live is disabled (with the reason) when the function has no key or isn't deployed. */
 export function ModeToggle() {
@@ -55,21 +56,28 @@ export function DraftCard({ draft }: { draft: Draft }) {
   const applyOverride = useStore((s) => s.applyOverride);
   const kill = useStore((s) => s.kill);
   const setSettings = useStore((s) => s.setSettings);
+  const approveChanges = useStore((s) => s.approveChanges);
   const [state, setState] = useState<'open' | 'done' | 'dismissed'>('open');
   if (state === 'dismissed') return <div className="draft muted small">Draft dismissed. Nothing changed.</div>;
   if (state === 'done') return <div className="draft ok small">Applied by you. Logged in the audit log.</div>;
   const approve = () => {
     if (draft.type === 'override') applyOverride(draft.group, draft.offer, draft.from, `${OFFER_BY_ID[draft.offer].label} (${inrSigned(draft.profit)} / month)`);
     else if (draft.type === 'pause') kill();
-    else setSettings(draft.patch);
+    else {
+      setSettings(draft.patch);
+      // Ray's card is the merchant's explicit approval: once live, the change goes through Approve changes (logged with its summary).
+      if (FEATURES.netReturns && useStore.getState().approved) approveChanges(draft.summary);
+    }
     setState('done');
   };
   return (
     <div className="draft card">
       <div className="mono-tag amber">Draft · needs your approval</div>
-      {draft.type === 'override' && (
-        <p>{draft.groupLabel}: <OfferChip offer={draft.from} muted /> → <OfferChip offer={draft.offer} />. Cost {inr(draft.spend)} / month for {num(draft.extraOrders, 1)} extra orders ({xr(draft.ret)}): <b className={draft.profit < 0 ? 'bad' : 'good'}>{inrSigned(draft.profit)} / month</b>.</p>
-      )}
+      {draft.type === 'override' && (draft.offer === 'none' && draft.vsNow ? (
+        <p>{draft.groupLabel}: <OfferChip offer={draft.from} muted /> → <OfferChip offer={draft.offer} />. Saves {inr(-draft.vsNow.spend)} / month · about {num(Math.abs(draft.vsNow.extraOrders))} fewer orders · profit change <b className={draft.vsNow.profit < 0 ? 'bad' : 'good'}>{inrSigned(draft.vsNow.profit)} / month</b>.</p>
+      ) : (
+        <p>{draft.groupLabel}: <OfferChip offer={draft.from} muted /> → <OfferChip offer={draft.offer} />. Cost {inr(draft.spend)} / month for about {num(draft.extraOrders)} extra orders ({xr(draft.ret)}{FEATURES.netReturns ? ' after returns' : ''}): <b className={draft.profit < 0 ? 'bad' : 'good'}>{inrSigned(draft.profit)} / month</b>{draft.vsNow ? <> ({inrSigned(draft.vsNow.profit)} vs now)</> : null}.</p>
+      ))}
       {draft.type === 'pause' && <p>Pause {draft.scope === 'all' ? 'all Smart Offers' : draft.scope}. Shoppers see the store default checkout.</p>}
       {draft.type === 'settings' && <p>{draft.summary}</p>}
       <div className="btns">

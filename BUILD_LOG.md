@@ -73,7 +73,13 @@ How AI tools were used, what they did, how they sped up the work, and where I ma
 - New Ray tool `get_daily_payments` and a day-by-day chart card. "Give me DoD graph of txn details of last 10 days" now draws the chart in both modes.
 - Tests: 76 passing; build passes.
 
+### 2026-10-11 — v2 (SMART_OFFERS_V2_BUILD_SPEC) on branch `v2-smart-offers`
+- Phase 0 audit: `docs/V2_AUDIT.md`. Phase-by-phase AI build log: `docs/AI_BUILD_LOG.md`.
+- Phase 1 (flag `netReturns`): profit and returns net of returns and failed COD (81% kept), default keep ₹500, draft vs approved settings with Approve changes / Discard, storage v2 with v1 migration, honest Why-AI comparison on the same budget, day-aware proof/alerts, control groups within ±3 pp. Tests 128 passing; build passes.
+
 <!-- Claude Code adds unclear spec points here with the option it chose. -->
+- v2 §3.2 expects ALPHA10 ₹746 per extra order and ₹617 earned; the engine gives ₹730 (254.8 extra orders) and ₹614 (store AOV ₹1,516). Chose: keep the engine values and report them.
+- v2 Phase 3 needs "₹150 off", which is not in `fixtures/offers.json`. Chose: define it in code as a cheaper amount of the "₹ off" offer already on the menu (fixtures untouched).
 - SPEC 5.2 asks the aggregated baseline "conversions within 0.5%" of the fixture, but the baseline month includes code lifts, so it can't match `base_conversion`. Chose: compare with the fixture-implied rate (base + share × code lift); checkouts exact, AOV exact to the rupee.
 - "About −2.9%" for the best reachable orders change is −2.85% exactly (rounds to −2.8 half-even). Chose: test with the spec's ±0.1 tolerance.
 - Live-mode model: spec says `claude-sonnet-5-5`; kept as default (override with `ANTHROPIC_MODEL`). The function uses low effort and the server-side refusal fallback (`fallbacks: "default"`).

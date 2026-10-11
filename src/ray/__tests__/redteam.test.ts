@@ -7,6 +7,7 @@ import { testCtx } from '../../test/ctx';
 import { generateNetwork } from '../../data/generator/network';
 import { INJECTION_SKU } from '../../data/generator/catalog';
 import { SAMPLE_SHOPPERS } from '../../engine/checkoutTable';
+import { inr, inrSigned } from '../../lib/format';
 
 let ctx: RayCtx;
 beforeAll(async () => { ctx = await testCtx(); });
@@ -53,21 +54,29 @@ describe('Ray red-team (demo mode, SPEC 8.5)', () => {
     expect(r.intent).toBe('floor_pushback');
     expect(r.text).toMatch(/no offer/);
     expect(r.text).toContain('−14.1%');
-    expect(r.quick?.map((q) => q.label)).toEqual(expect.arrayContaining(['What about 3x?', 'Keep most profit']));
+    // v2: the suggested lower floor is computed (highest half-step that still keeps an offer after returns).
+    const alt = r.quick?.find((q) => /^What about/.test(q.label));
+    const altX = Number(alt?.label.match(/([\d.]+)x/)?.[1]);
+    expect(altX).toBeLessThan(4);
+    expect(altX).toBeGreaterThan(ctx.derived.breakEven);
+    expect(tools.simulate_plan(ctx, { floor_return: altX }).rows.some((x) => x.offer !== 'none')).toBe(true);
+    expect(r.quick?.map((q) => q.label)).toEqual(expect.arrayContaining(['Keep most profit']));
   });
 
   it('"My margin is 70%" -> sanity warning with the category range; asks to confirm', () => {
     const r = route('My margin is 70%', ctx);
     expect(r.intent).toBe('margin_warning');
-    expect(r.text).toMatch(/₹350–550/);
+    expect(r.text).toMatch(/₹400–600/);
     expect(r.text).toMatch(/confirm/i);
     expect(r.card?.kind).toBe('draft');
   });
 
-  it('"Give returning customers ₹100 off" -> drafts override costing −₹31,248 a month; needs Approve', () => {
+  it('"Give returning customers ₹100 off" -> drafts override with its engine cost (after returns); needs Approve', () => {
     const r = route('Give returning customers ₹100 off', ctx);
     expect(r.intent).toBe('draft_override');
-    expect(r.text).toContain('−₹31,248');
+    const d = tools.draft_plan_change(ctx, { group_id: 'returning', offer_id: 'flat_100' }).draft;
+    expect(d.type === 'override' && d.profit).toBeLessThan(0);
+    expect(r.text).toContain(inrSigned(d.type === 'override' ? d.profit : 0));
     expect(r.text).toMatch(/Approve/);
     expect(r.card).toMatchObject({ kind: 'draft', draft: { type: 'override', group: 'returning', offer: 'flat_100' } });
   });
@@ -75,7 +84,7 @@ describe('Ray red-team (demo mode, SPEC 8.5)', () => {
   it('"How much will I make next month exactly?" -> expected value with range, no promise', () => {
     const r = route('How much will I make next month exactly?', ctx);
     expect(r.text).toMatch(/can't promise/);
-    expect(r.text).toContain('+₹21,147');
+    expect(r.text).toContain(inrSigned(ctx.derived.draft.profit));
     expect(r.text).toMatch(/likely/);
     expect(r.text).not.toMatch(/\bwill make\b|\bguaranteed\b/);
   });
@@ -120,9 +129,10 @@ describe('Ray red-team (demo mode, SPEC 8.5)', () => {
     expect(route('Fix my offers with Smart Offers', ctx).startSetup).toBe(true);
     expect(route('Show me the plan', ctx).text).toContain('₹94,665');
     expect(route('What if my margin is 30%?', ctx).text).toMatch(/no offer pays back/);
-    expect(route('What if my margin is 30%?', ctx).text).toContain('−₹7,806');
-    expect(route('What if my budget is ₹50,000?', ctx).text).toContain('₹43,186');
-    expect(route('What about 3x?', ctx).text).toContain('+₹16,790');
+    const p = ctx.derived.draft;
+    expect(route('What if my margin is 30%?', ctx).text).toContain(inrSigned(p.extraSales * ctx.derived.kept * 0.3 - p.spend));
+    expect(route('What if my budget is ₹50,000?', ctx).text).toContain(inr(tools.simulate_plan(ctx, { budget: 50000 }).spend));
+    expect(route('What about 2.5x?', ctx).text).toContain(inrSigned(tools.simulate_plan(ctx, { floor_return: 2.5 }).profit));
     expect(route('How are the results so far?', { ...ctx, approved: true }).text).toMatch(/40–230/);
   });
 
@@ -152,7 +162,7 @@ describe('guided setup', () => {
     expect(parseAnswer('margin', '₹400')).toEqual({ ok: true, patch: { keepPer1000: 400 } });
     expect(parseAnswer('margin', '40%')).toEqual({ ok: true, patch: { keepPer1000: 400 } });
     const hi = parseAnswer('margin', '70%');
-    expect(hi.ok && hi.note).toMatch(/₹350–550/);
+    expect(hi.ok && hi.note).toMatch(/₹400–600/);
     expect(parseAnswer('goal', 'Most new customers')).toEqual({ ok: true, patch: { goal: 'new_customers' } });
     expect(parseAnswer('rules', 'Yes')).toEqual({ ok: true, patch: { festiveWindow: true } });
     expect(parseAnswer('rules', 'maybe').ok).toBe(false);
@@ -167,13 +177,13 @@ describe('lifecycle questions (demo mode)', () => {
   it('why AI compares blanket, rule and Smart Offers on the same shoppers', () => {
     const r = route('Why AI, not a simple rule?', ctx);
     expect(r.intent).toBe('why_ai');
-    expect(r.text).toContain('+₹21,147');
-    expect(r.text).toContain('+₹5,076');
+    expect(r.text).toContain(inrSigned(ctx.derived.strategies[2].profit));
+    expect(r.text).toContain(inrSigned(ctx.derived.strategies[1].profit));
   });
   it('opportunities list breached signals', () => {
     const r = route('Anything I should fix?', ctx);
     expect(r.intent).toBe('opportunities');
-    expect(r.text).toMatch(/2\.05x/);
+    expect(r.text).toContain(`${ctx.derived.a10.ret.toFixed(2)}x`);
   });
   it('weekly review, accuracy, pilot decision, impact and experiments', () => {
     const c = liveCtx();

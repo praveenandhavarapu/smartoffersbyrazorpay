@@ -22,9 +22,10 @@ export function ModelProvider({ children }: { children: ReactNode }) {
   const killed = useStore((s) => s.killed);
   const moment = useStore((s) => s.moment);
   const creatorFix = useStore((s) => s.creatorFix);
+  const creatorFixDate = useStore((s) => s.creatorFixedOn);
   const derived = useMemo(
-    () => (model ? derive(model, { settings, approved, approvedSettings, overrides, killed, moment, creatorFix }) : null),
-    [model, settings, approved, approvedSettings, overrides, killed, moment, creatorFix],
+    () => (model ? derive(model, { settings, approved, approvedSettings, overrides, killed, moment, creatorFix, creatorFixDate }) : null),
+    [model, settings, approved, approvedSettings, overrides, killed, moment, creatorFix, creatorFixDate],
   );
   if (error) {
     return (

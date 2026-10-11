@@ -72,8 +72,8 @@ export function decide(table: CheckoutTable, s: Shopper): CheckoutDecision {
 }
 
 /** Numbers for the "Why" panel. */
-export function whyNumbers(g: GroupStats, offer: OfferId, margin: number) {
-  const e = perCheckout(g, offer, margin);
+export function whyNumbers(g: GroupStats, offer: OfferId, margin: number, kept = 1) {
+  const e = perCheckout(g, offer, margin, undefined, kept);
   return { withoutRate: g.baseConversion, withRate: offer === 'none' ? g.baseConversion : e.p, costPerOrder: OFFER_BY_ID[offer].costPerOrderInr, ret: e.ret };
 }
 

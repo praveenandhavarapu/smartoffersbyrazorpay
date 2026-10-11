@@ -9,6 +9,8 @@ import { dateTimeIST, inr, inrP, inrP2, inrSigned, num, pctOf, xr } from '../../
 import { Clover } from '../components/Icons';
 import { MethodMix, MonthlyBars } from '../components/charts';
 import { Stat, Status } from '../components/kit';
+import { FEATURES } from '../../config/features';
+import { RETURN_LABEL } from '../../engine/net';
 
 export function Home() {
   const { model, derived } = useModel();
@@ -45,12 +47,13 @@ export function Home() {
           ) : approved ? (
             <>
               <b>Smart Offers is {killed ? 'paused' : 'live'}.</b>
-              <span> Day 20: {inrSigned(derived.snapshots.day20.profit)} extra profit vs the holdout, return {xr(derived.snapshots.day20.ret)}. ALPHA10 would have lost {inr(Math.abs(derived.snapshots.day20.alpha10SamePeriod))} in the same period.</span>
+              {FEATURES.netReturns ? (() => { const t = derived.snapshots[derived.today ?? 'day20']; return <span> Day {t.days}: {inrSigned(t.profit)} extra profit after returns vs the holdout, {RETURN_LABEL.toLowerCase()} {xr(t.ret)}. ALPHA10 would have lost {inr(Math.abs(t.alpha10SamePeriod))} in the same period.</span>; })()
+                : <span> Day 20: {inrSigned(derived.snapshots.day20.profit)} extra profit vs the holdout, return {xr(derived.snapshots.day20.ret)}. ALPHA10 would have lost {inr(Math.abs(derived.snapshots.day20.alpha10SamePeriod))} in the same period.</span>}
             </>
           ) : (
             <>
               <b>ALPHA10 lost you {inr(Math.abs(derived.a10.profit))} last month.</b>
-              <span> It cost {inr(derived.a10.spend)} for {xr(derived.a10.ret)} back, below your {xr(derived.breakEven)} break-even. {pctOf((derived.a10.rows.find((r) => r.group === 'returning')?.spend ?? 0) / derived.a10.spend, 0)} went to returning buyers who'd buy anyway.</span>
+              <span> It cost {inr(derived.a10.spend)} for {xr(derived.a10.ret)} back{FEATURES.netReturns ? ' after returns' : ''}, below your {xr(derived.breakEven)} break-even. {pctOf((derived.a10.rows.find((r) => r.group === 'returning')?.spend ?? 0) / derived.a10.spend, 0)} went to returning buyers who'd buy anyway.</span>
             </>
           )}
         </div>

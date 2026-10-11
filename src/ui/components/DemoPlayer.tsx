@@ -5,6 +5,7 @@ import { useChat } from '../../ray/chatStore';
 import { useRay } from '../../ray/useRay';
 import { useDemo } from './demoStore';
 import { Pause, Play } from './Icons';
+import { DEFAULT_KEEP_PER_1000 } from '../../engine/net';
 
 type Step = { route: string; caption: string; run?: () => void | Promise<void> };
 const STEP_MS = 5800; // 15 steps ≈ 87 s
@@ -26,7 +27,7 @@ export function DemoPlayer() {
     { route: '/ray', caption: 'Ask Ray "Anything I should fix?": the signals behind it, each against a threshold', run: () => { useChat.getState().clear(); return ask('Anything I should fix?'); } },
     { route: '/ray', caption: 'Why AI, not a rule: same shoppers, three options, and what a rule can\'t do', run: () => ask('Why AI, not a simple rule?') },
     { route: '/ray', caption: 'Set up Smart Offers: four quick questions', run: () => ask('Set up Smart Offers') },
-    { route: '/ray', caption: 'Monthly budget, and what the merchant keeps from a ₹1,000 sale', run: async () => { await ask('₹1,00,000'); await ask('₹400'); } },
+    { route: '/ray', caption: 'Monthly budget, and what the merchant keeps from a ₹1,000 sale', run: async () => { await ask('₹1,00,000'); await ask(`₹${DEFAULT_KEEP_PER_1000}`); } },
     { route: '/ray', caption: 'Goal and rules → the plan: an offer or none per group, chosen for profit; the holdout\'s cost shown up front', run: async () => { await ask('Most profit'); await ask('Yes'); scrollTo('#plan-card'); } },
     { route: '/ray', caption: 'Approve & go live: only a human click spends money', run: () => { useStore.getState().approve(); scrollTo('.ok-card'); } },
     { route: '/offers/smart?tab=checkout', caption: '20 days later. Priya, new from an Instagram ad, sees her group\'s offer', run: () => { useStore.getState().jump20(); setShopper('priya'); } },

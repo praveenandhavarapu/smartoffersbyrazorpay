@@ -8,6 +8,7 @@ import { inr, num, pctOf, xr } from '../../lib/format';
 import { Info, Lock, Tag } from '../components/Icons';
 import { Banner, MonoTag, OfferChip } from '../components/bits';
 import { useDemo } from '../components/demoStore';
+import { RETURN_LABEL } from '../../engine/net';
 
 function CustomForm({ value, onChange }: { value: Shopper; onChange: (s: Shopper) => void }) {
   const cart = cartValue(value);
@@ -52,7 +53,7 @@ export function Checkout() {
 
   const g = model.groups.find((x) => x.id === d.group)!;
   const planOffer = derived.liveOffers[d.group];
-  const why = whyNumbers(g, planOffer, derived.margin);
+  const why = whyNumbers(g, planOffer, derived.margin, derived.kept);
   const shipping = d.offer === 'free_shipping' ? 0 : d.shippingInr;
   const discount = d.offer === 'flat_100' || d.offer === 'flat_200' ? d.savingInr : 0;
   const total = d.cartInr - discount + shipping;
@@ -123,7 +124,7 @@ export function Checkout() {
                 <div><span>Without offer</span><i style={{ width: `${why.withoutRate * 100}%` }} /><span>{pctOf(why.withoutRate, 0)}</span></div>
                 <div><span>With {planOffer === 'none' ? 'no offer' : OFFER_BY_ID[planOffer].label}</span><i className="g" style={{ width: `${why.withRate * 100}%` }} /><span>{pctOf(why.withRate, 0)}</span></div>
               </div>
-              <p>Cost per order: {inr(why.costPerOrder)} · return {planOffer === 'none' ? '—' : xr(why.ret)} (break-even {xr(derived.breakEven)}).</p>
+              <p>Cost per order: {inr(why.costPerOrder)} · {RETURN_LABEL.toLowerCase()} {planOffer === 'none' ? '—' : xr(why.ret)} (break-even {xr(derived.breakEven)}).</p>
             </>
           )}
           <div className="dec"><span>Decision</span><OfferChip offer={d.offer} /></div>

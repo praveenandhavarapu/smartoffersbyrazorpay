@@ -39,7 +39,8 @@ export type Snapshot = {
 const Z90 = 1.645;
 export const TRUST_K = 300;
 
-export function measure(groups: GroupStats[], offerOf: Record<GroupId, OfferId>, counts: Record<GroupId, ArmCounts>, days: number, margin = PROFILE.marginPct / 100): Snapshot {
+/** kept: v2 share of extra sales kept after returns and failed COD (1 = v1). Returns and profit are net of it. */
+export function measure(groups: GroupStats[], offerOf: Record<GroupId, OfferId>, counts: Record<GroupId, ArmCounts>, days: number, margin = PROFILE.marginPct / 100, kept = 1): Snapshot {
   let S = 0, X = 0, O = 0, VAR = 0;
   const rows: MeasuredRow[] = groups.map((g) => {
     const c = counts[g.id];
@@ -60,16 +61,16 @@ export function measure(groups: GroupStats[], offerOf: Record<GroupId, OfferId>,
       liftLow: lift - Z90 * se, liftHigh: lift + Z90 * se, stillLearning: lift - Z90 * se <= 0,
       trustWeight: c.holdoutCheckouts / (c.holdoutCheckouts + TRUST_K),
       spend: o === 'none' ? 0 : spend, extraOrders: o === 'none' ? 0 : extra, extraSales: o === 'none' ? 0 : sales,
-      ret: o === 'none' || !spend ? 0 : sales / spend,
+      ret: o === 'none' || !spend ? 0 : (sales * kept) / spend,
     };
   });
   const sd = Math.sqrt(VAR);
-  const mix = O ? X / O : 0;
+  const mix = (O ? X / O : 0) * kept;
   return {
     days, rows, spend: S, extraSales: X, extraOrders: O,
     extraOrdersLow: O - Z90 * sd, extraOrdersHigh: O + Z90 * sd,
-    ret: S ? X / S : 0, retLow: S ? ((O - Z90 * sd) * mix) / S : 0, retHigh: S ? ((O + Z90 * sd) * mix) / S : 0,
-    profit: X * margin - S,
+    ret: S ? (X * kept) / S : 0, retLow: S ? ((O - Z90 * sd) * mix) / S : 0, retHigh: S ? ((O + Z90 * sd) * mix) / S : 0,
+    profit: X * kept * margin - S,
   };
 }
 

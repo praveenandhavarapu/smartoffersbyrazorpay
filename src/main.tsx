@@ -5,6 +5,7 @@ import App from './App';
 import './styles/tokens.css';
 import './styles/app.css';
 import './styles/extra.css';
+import './styles/v2.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

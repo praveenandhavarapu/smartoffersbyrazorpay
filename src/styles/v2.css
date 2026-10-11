@@ -1,0 +1,9 @@
+/* v2 additions (SMART_OFFERS_V2_BUILD_SPEC). Uses existing tokens; no redesign. */
+.hint { display: block; color: var(--ink3); font-style: normal; font-size: 12px; margin-top: 4px; }
+.hint.ro { color: var(--ink2); }
+.pill.draft { background: var(--amber-soft); color: var(--amber); border: 1px solid var(--amber-line); }
+.draft-bar { border: 1px solid var(--amber-line); background: var(--amber-soft); border-radius: 10px; padding: 10px 12px; margin: 8px 0 12px; display: grid; gap: 8px; }
+.draft-bar b { color: var(--amber); }
+.draft-bar ul { margin: 0; padding-left: 18px; font-size: 13px; color: var(--ink); }
+.draft-bar .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.footnote { font-size: 12px; color: var(--ink3); margin: 6px 0 0; }

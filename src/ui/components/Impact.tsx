@@ -13,6 +13,7 @@ import { NEW_GROUPS } from '../../data/types';
 import { DEMO_DATES, toUnix } from '../../lib/dates';
 import { inr, inrSigned, num, pctOf, xr } from '../../lib/format';
 import { MonoTag } from './bits';
+import { FEATURES } from '../../config/features';
 
 type Row = { metric: string; now: ReactNode; target: ReactNode; why: string; ok?: boolean | null };
 
@@ -42,11 +43,12 @@ export function ImpactView() {
   const st = useStore();
   const v = useLedger();
   const live = st.approved && st.moment !== 'before';
-  const snap = st.moment === 'day30' ? derived.snapshots.day30 : derived.snapshots.day20;
+  const snap = FEATURES.netReturns ? derived.snapshots[derived.today ?? 'day20'] : st.moment === 'day30' ? derived.snapshots.day30 : derived.snapshots.day20;
   const monthly = (x: number) => (x * 30) / snap.days;
   const mix = snap.extraOrders ? snap.extraSales / snap.extraOrders : 0;
-  const profitLow = snap.extraOrdersLow * mix * 0.4 - snap.spend;
-  const profitHigh = snap.extraOrdersHigh * mix * 0.4 - snap.spend;
+  const effMargin = FEATURES.netReturns ? derived.margin * derived.kept : 0.4;
+  const profitLow = snap.extraOrdersLow * mix * effMargin - snap.spend;
+  const profitHigh = snap.extraOrdersHigh * mix * effMargin - snap.spend;
 
   const acc = accuracySummary(accuracyRows(model.groups, snap, model.pool.p25, model.pool.p75));
   const latency = useMemo(() => {
@@ -92,15 +94,15 @@ export function ImpactView() {
     <div className="stack-gap impact">
       <section className="rcard north">
         <span className="mono-tag green">North star</span>
-        <h3>Extra profit for the merchant, measured against the holdout</h3>
+        <h3>Extra profit for the merchant{FEATURES.netReturns ? ' after returns' : ''}, measured against the holdout</h3>
         {live ? (
           <div className="north-v"><b>{inrSigned(monthly(snap.profit))}</b><span>a month (day {snap.days}) · 90% range {inrSigned(monthly(profitLow))} to {inrSigned(monthly(profitHigh))}</span></div>
-        ) : <div className="north-v"><b>{inrSigned(derived.draft.profit)}</b><span>a month, planned (before launch, from similar stores)</span></div>}
+        ) : <div className="north-v"><b>{inrSigned(FEATURES.netReturns ? derived.live.profit : derived.draft.profit)}</b><span>a month, planned (before launch, from similar stores)</span></div>}
         <p className="small muted">Why this metric: it is what the merchant keeps, it counts only orders the holdout proves were extra, and the fee is tied to it, so Razorpay earns only when the merchant does.</p>
       </section>
 
       <Table title="Merchant outcomes" rows={[
-        { metric: 'Return on offer spend', now: live ? <>{xr(snap.ret)} <span className="sub">range {xr(snap.retLow)}–{xr(snap.retHigh)}</span></> : xr(derived.draft.ret), target: `≥ ${xr(derived.breakEven)} (break-even)`, why: 'Below break-even, every offer rupee loses money.', ok: live ? snap.ret >= derived.breakEven : null },
+        { metric: FEATURES.netReturns ? 'Return after returns on offer spend' : 'Return on offer spend', now: live ? <>{xr(snap.ret)} <span className="sub">range {xr(snap.retLow)}–{xr(snap.retHigh)}</span></> : xr(FEATURES.netReturns ? derived.live.ret : derived.draft.ret), target: `≥ ${xr(derived.breakEven)} (break-even)`, why: 'Below break-even, every offer rupee loses money.', ok: live ? snap.ret >= derived.breakEven : null },
         { metric: 'Offers + coupons as % of sales', now: live ? <>{pctOf(shareAfter)} <span className="sub">was {pctOf(shareBefore)} with ALPHA10</span></> : pctOf(shareBefore), target: `< ${pctOf(TARGETS.discountShareMax, 0)}`, why: 'Discount waste shows up here first.', ok: live ? shareAfter < TARGETS.discountShareMax : null },
         { metric: 'Extra orders vs holdout', now: live ? <>{num(monthly(snap.extraOrders))} a month <span className="sub">proven at least {num(monthly(snap.extraOrdersLow))}</span></> : na, target: 'lower bound > 0', why: 'Proof that offers create orders, not just discount them.', ok: live ? snap.extraOrdersLow > 0 : null },
         { metric: 'New-shopper conversion', now: live ? <>{pctOf(convNow)} <span className="sub">{pctOf(convBefore)} in the ALPHA10 month</span></> : pctOf(convBefore), target: 'within 1 pp of before', why: 'Guards growth: ad platforms optimise on purchases.', ok: live ? convBefore - convNow <= 0.01 : null },
@@ -129,7 +131,7 @@ export function ImpactView() {
 
       <Table title="Guardrails (must not get worse)" rows={[
         { metric: 'Checkout decision time', now: `${latency.toFixed(3)} ms average (measured now in your browser)`, target: `< ${CHECKOUT_BUDGET_MS} ms`, why: 'Checkout speed is sacred; a lookup table, no AI in the path.', ok: latency < CHECKOUT_BUDGET_MS },
-        { metric: 'Monthly budget', now: live ? `${inr(projectedSpend)} projected of ${inr(budget)}` : `${inr(derived.draft.spend)} planned of ${inr(budget)}`, target: 'never above budget (hard stop)', why: 'Spend can never exceed what the merchant approved.', ok: live ? projectedSpend <= budget * 1.02 : true },
+        { metric: 'Monthly budget', now: live ? `${inr(projectedSpend)} projected of ${inr(budget)}` : `${inr(FEATURES.netReturns ? derived.live.spend : derived.draft.spend)} planned of ${inr(budget)}`, target: 'never above budget (hard stop)', why: 'Spend can never exceed what the merchant approved.', ok: live ? projectedSpend <= budget * 1.02 : true },
         { metric: 'Daily cap breaches', now: live ? `${capBreaches}` : na, target: '0', why: `Daily cap ${inr(DAILY_SPEND_CAP)} stops runaway days.`, ok: live ? capBreaches === 0 : null },
         { metric: 'Return rate (orders)', now: live ? <>{pctOf(returnsNow)} <span className="sub">{pctOf(returnsBefore)} before</span></> : pctOf(returnsBefore), target: 'no increase', why: 'Discount-driven orders can come back as returns.', ok: live ? returnsNow <= returnsBefore + 0.02 : null },
         { metric: 'Engine outage simulations', now: `${st.outageEvents} (shopper saw store default)`, target: 'fail-safe every time', why: 'If Smart Offers is down, checkout still works.', ok: true },
@@ -140,7 +142,7 @@ export function ImpactView() {
         { metric: 'Pilot → paid conversion', now: st.pilotDecision ?? '—', target: pctOf(TARGETS.funnel.paidAfterPilot, 0), why: 'Validates willingness to pay.' },
         { metric: 'Magic Checkout merchants retained', now: '—', target: 'higher than non-users', why: 'Smart Offers makes Magic Checkout stickier.' },
       ]} />
-      <MonoTag>Targets are product goals set before a real pilot; edit them in src/engine/targets.ts.</MonoTag>
+      <MonoTag>{FEATURES.netReturns ? 'Targets are product goals set before a real pilot, not measurements.' : 'Targets are product goals set before a real pilot; edit them in src/engine/targets.ts.'}</MonoTag>
     </div>
   );
 }

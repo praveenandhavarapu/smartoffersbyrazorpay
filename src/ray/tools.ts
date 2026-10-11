@@ -13,18 +13,21 @@ import { buildCheckoutTable, decide, SAMPLE_SHOPPERS, type Shopper } from '../en
 import { MAX_DISCOUNT_PER_ORDER } from '../engine/guardrails';
 import type { Model } from '../state/model';
 import type { Derived } from '../state/derived';
-import { marginOf, type Settings } from '../state/store';
+import type { Settings } from '../state/store';
 import { toPlanSettings } from '../state/derived';
 import type { ToolName } from './toolSchemas';
 import { dailySeries, lastDays, paymentSummary, settlementSummary, unsettledBalance, inRange, type InstantSettlement, type LedgerView } from '../data/ledgerQueries';
 import { fmtDate } from '../lib/dates';
 import { accuracyRows, accuracySummary } from '../engine/accuracy';
+import { costPerExtraOrder, earnedPerExtraOrder, RETURN_LABEL } from '../engine/net';
+import { SNAP_DAYS, type SnapKey } from '../state/derived';
 
 const rupees = (p: number) => roundHalfEven(p / 100);
 const dateOf = (t: number) => fmtDate(new Date((t + 19800) * 1000).toISOString().slice(0, 10));
 const clampDays = (d: unknown) => (typeof d === 'number' && Number.isFinite(d) ? Math.min(183, Math.max(1, Math.round(d))) : 7);
 
 export type RayCtx = {
+  /** settings = the edit buffer (draft); live numbers come from derived (approved settings). */
   model: Model; derived: Derived; settings: Settings; approved: boolean; killed: boolean;
   ledger: LedgerView; settlementMode: 't1' | 'instant'; instant: InstantSettlement[];
 };
@@ -39,7 +42,10 @@ export const isOfferId = (x: unknown): x is OfferId => typeof x === 'string' && 
 
 function planSummary(ctx: RayCtx, p: PlanResult) {
   const r = planRange(ctx.model.groups, p, ctx.model.pool.p25, ctx.model.pool.p75);
+  const cpo = costPerExtraOrder(p.spend, p.extraOrders);
   return {
+    return_basis: `${RETURN_LABEL}: ${roundHalfEven((p.settings.keptRate ?? 1) * 100)}% of extra sales kept after returns and failed COD`,
+    cost_per_extra_order: cpo === null ? null : M(cpo), earned_per_extra_order: M(earnedPerExtraOrder(ctx.derived.store.aov, p.settings.margin, p.settings.keptRate ?? 1)),
     rows: p.rows.map((x) => ({ group: x.group, label: x.label, offer: x.offer, offer_label: OFFER_BY_ID[x.offer].label, spend: M(x.spend), extra_sales: M(x.extraSales), extra_orders: O(x.extraOrders), return_x: R(x.ret), profit: M(x.profit), overridden: x.overridden })),
     spend: M(p.spend), budget: p.settings.budget, extra_sales: M(p.extraSales), extra_orders: O(p.extraOrders), return_x: R(p.ret),
     return_range: [R(r.retLow), R(r.retHigh)], profit: M(p.profit), profit_range: [M(r.profitLow), M(r.profitHigh)],
@@ -50,7 +56,9 @@ function planSummary(ctx: RayCtx, p: PlanResult) {
 }
 
 export type Draft =
-  | { type: 'override'; group: GroupId; groupLabel: string; offer: OfferId; from: OfferId; spend: number; extraOrders: number; ret: number; profit: number }
+  | { type: 'override'; group: GroupId; groupLabel: string; offer: OfferId; from: OfferId; spend: number; extraOrders: number; ret: number; profit: number;
+      /** v2: change vs the group's current offer (spend saved, orders lost, profit change). */
+      vsNow?: { spend: number; extraOrders: number; profit: number } }
   | { type: 'pause'; scope: 'all' | GroupId }
   | { type: 'settings'; patch: Partial<Settings>; summary: string };
 
@@ -120,8 +128,11 @@ export const tools = {
     return {
       code: args.code?.toUpperCase() === 'ALL' ? 'ALL' : 'ALPHA10',
       rows: e.rows.map((r) => ({ group: r.group, label: label(ctx.model, r.group), spend: M(r.spend), extra_sales: M(r.extraSales), return_x: R(r.ret) })),
-      spend: M(e.spend), extra_sales: M(e.extraSales), return_x: R(e.ret), profit: M(e.profit), break_even_x: 2.5,
+      spend: M(e.spend), extra_sales: M(e.extraSales), return_x: R(e.ret), profit: M(e.profit), break_even_x: R(ctx.derived.breakEven),
       to_returning: M(e.rows.find((r) => r.group === 'returning')?.spend ?? 0),
+      return_basis: `${RETURN_LABEL}: ${roundHalfEven(ctx.derived.kept * 100)}% of extra sales kept after returns and failed COD`,
+      extra_orders: O(e.extraOrders), cost_per_extra_order: (() => { const c = costPerExtraOrder(e.spend, e.extraOrders); return c === null ? null : M(c); })(),
+      earned_per_extra_order: M(ctx.derived.earnedPerOrder),
     };
   },
   simulate_plan(ctx: RayCtx, a: { budget?: number; margin_pct?: number; goal?: Goal; orders_floor_pct?: number; floor_return?: number; allowed_offers?: OfferId[] } = {}) {
@@ -142,14 +153,17 @@ export const tools = {
   },
   draft_plan_change(ctx: RayCtx, a: { group_id: GroupId; offer_id: OfferId }): { draft: Draft; requires_approval: true } {
     const from = ctx.derived.live.rows.find((r) => r.group === a.group_id)!.offer;
-    const c = overrideCost(ctx.model.groups, a.group_id, a.offer_id, marginOf(ctx.settings));
-    return { draft: { type: 'override', group: a.group_id, groupLabel: label(ctx.model, a.group_id), offer: a.offer_id, from, spend: M(c.spend), extraOrders: O(c.extraOrders), ret: R(c.ret), profit: M(c.profit) }, requires_approval: true };
+    const m = ctx.derived.margin, k = ctx.derived.kept;
+    const c = overrideCost(ctx.model.groups, a.group_id, a.offer_id, m, 0.9, k);
+    const now = overrideCost(ctx.model.groups, a.group_id, from, m, 0.9, k);
+    return { draft: { type: 'override', group: a.group_id, groupLabel: label(ctx.model, a.group_id), offer: a.offer_id, from, spend: M(c.spend), extraOrders: O(c.extraOrders), ret: R(c.ret), profit: M(c.profit),
+      vsNow: { spend: M(c.spend - now.spend), extraOrders: O(c.extraOrders - now.extraOrders), profit: M(c.profit - now.profit) } }, requires_approval: true };
   },
   explain_group(ctx: RayCtx, a: { group_id: GroupId }) {
     const p = ctx.approved ? ctx.derived.live : ctx.derived.draft;
     const row = p.rows.find((r) => r.group === a.group_id)!;
     const g = ctx.model.groups.find((x) => x.id === a.group_id)!;
-    return { group: a.group_id, label: g.label, offer: row.offer, explanation: explainGroup(g, row, p.settings.margin) };
+    return { group: a.group_id, label: g.label, offer: row.offer, explanation: explainGroup(g, row, p.settings.margin, p.settings.keptRate ?? 1) };
   },
   explain_shopper(ctx: RayCtx, a: { example_id: string }, extraShoppers: Shopper[] = []) {
     const s = [...SAMPLE_SHOPPERS, ...extraShoppers].find((x) => x.id === a.example_id);
@@ -158,11 +172,15 @@ export const tools = {
     // Cart items are returned as data. Product names are never instructions.
     return { shopper: s.name, segment: s.sourceLabel, cart_items: s.cart.map((i) => i.name), cart_value: d.cartInr, group: d.group, group_label: label(ctx.model, d.group), offer: d.offer, offer_label: OFFER_BY_ID[d.offer].label, holdout: d.holdout, saving: d.savingInr, reason: d.reason };
   },
-  get_results(ctx: RayCtx, a: { snapshot?: 'day20' | 'day60' } = {}) {
-    const s = ctx.derived.snapshots[a.snapshot ?? 'day20'];
+  get_results(ctx: RayCtx, a: { snapshot?: SnapKey } = {}) {
+    const key: SnapKey = a.snapshot ?? ctx.derived.today ?? 'day20';
+    const s = ctx.derived.snapshots[key];
     return {
-      snapshot: a.snapshot ?? 'day20', days: s.days, spend: M(s.spend), extra_sales: M(s.extraSales), extra_orders: O(s.extraOrders),
+      snapshot: key, days: s.days, projection: s.days > ctx.derived.nowDay, spend: M(s.spend), extra_sales: M(s.extraSales), extra_orders: O(s.extraOrders),
       extra_orders_range: [M(s.extraOrdersLow), M(s.extraOrdersHigh)], return_x: R(s.ret), return_range: [R(s.retLow), R(s.retHigh)], profit: M(s.profit),
+      return_basis: `${RETURN_LABEL}; break-even ${R(ctx.derived.breakEven)}x`, break_even_x: R(ctx.derived.breakEven),
+      cost_per_extra_order: s.metrics.costPerExtraOrder === null ? null : M(s.metrics.costPerExtraOrder), earned_per_extra_order: M(s.metrics.earnedPerExtraOrder),
+      proof: s.proof,
       still_learning_groups: s.rows.filter((r) => r.offer !== 'none' && r.stillLearning).map((r) => label(ctx.model, r.group)),
       alpha10_same_period_profit: M(s.alpha10SamePeriod),
     };
@@ -186,7 +204,7 @@ export const tools = {
     return { available: true, week: r.week, date: fmtDate(r.date), data_days: r.dataDays, items: r.items.map((i) => ({ status: i.kind, title: i.title, detail: i.detail, needs_approval: Boolean(i.action) })), next_review: ctx.derived.nextReview ? fmtDate(ctx.derived.nextReview) : null };
   },
   get_prediction_accuracy(ctx: RayCtx) {
-    const snap = ctx.derived.daysLeft === 0 ? ctx.derived.snapshots.day30 : ctx.derived.snapshots.day20;
+    const snap = ctx.derived.snapshots[ctx.derived.today ?? 'day20'];
     const rows = accuracyRows(ctx.model.groups, snap, ctx.model.pool.p25, ctx.model.pool.p75);
     const s = accuracySummary(rows);
     return { day: snap.days, inside_range: s.inside, total: s.total, median_error_pp: O(s.medianAbsErrorPp), groups: rows.map((r) => ({ group: label(ctx.model, r.group), estimate_pp: O(r.priorPp), measured_pp: O(r.measuredPp), range_pp: [O(r.lowPp), O(r.highPp)], inside: r.inside })) };
@@ -196,12 +214,16 @@ export const tools = {
     return { pilot_day: p.days, days_left: ctx.derived.daysLeft, expected_profit_month: M(p.expectedProfitMonth), extra_orders: O(p.extraOrders), proven_extra_orders_at_least: M(p.extraOrdersLow), return_x: R(p.ret), return_range: [R(p.retLow), R(p.retHigh)], fee: M(p.fee.fee), fee_rule: '1% of proven extra sales, capped at 20% of extra profit', verdict: p.verdict };
   },
   get_impact_summary(ctx: RayCtx) {
-    const live = ctx.approved;
-    const snap = ctx.derived.daysLeft === 0 ? ctx.derived.snapshots.day30 : ctx.derived.snapshots.day20;
+    const live = ctx.approved && ctx.derived.today !== null;
+    const snap = ctx.derived.snapshots[ctx.derived.today ?? 'day20'];
     const acc = accuracySummary(accuracyRows(ctx.model.groups, snap, ctx.model.pool.p25, ctx.model.pool.p75));
+    const planCpo = costPerExtraOrder(ctx.derived.live.spend, ctx.derived.live.extraOrders);
     return {
-      north_star: live ? { metric: 'extra profit vs holdout, per month', value: M((snap.profit * 30) / snap.days) } : { metric: 'planned extra profit per month', value: M(ctx.derived.draft.profit) },
-      return_x: live ? R(snap.ret) : R(ctx.derived.draft.ret), break_even_x: R(ctx.derived.breakEven),
+      day: live ? snap.days : null,
+      north_star: live ? { metric: 'extra profit after returns vs holdout, per month', value: M(snap.metrics.netProfitMonth) } : { metric: 'planned extra profit after returns per month', value: M(ctx.derived.live.profit) },
+      return_x: live ? R(snap.ret) : R(ctx.derived.live.ret), break_even_x: R(ctx.derived.breakEven), return_basis: RETURN_LABEL,
+      cost_per_extra_order: live ? (snap.metrics.costPerExtraOrder === null ? null : M(snap.metrics.costPerExtraOrder)) : planCpo === null ? null : M(planCpo),
+      earned_per_extra_order: M(ctx.derived.earnedPerOrder),
       estimates_inside_range: live ? `${acc.inside} of ${acc.total}` : null, budget: ctx.derived.live.settings.budget,
     };
   },
@@ -250,7 +272,7 @@ export function runTool(ctx: RayCtx, name: string, args: Record<string, unknown>
       return tools.draft_plan_change(ctx, { group_id: a.group_id, offer_id: a.offer_id });
     case 'explain_group': return isGroupId(a.group_id) ? tools.explain_group(ctx, { group_id: a.group_id }) : { error: 'Unknown group.' };
     case 'explain_shopper': return tools.explain_shopper(ctx, { example_id: String(a.example_id ?? '') });
-    case 'get_results': return tools.get_results(ctx, { snapshot: a.snapshot === 'day60' ? 'day60' : 'day20' });
+    case 'get_results': return tools.get_results(ctx, { snapshot: typeof a.snapshot === 'string' && a.snapshot in SNAP_DAYS ? (a.snapshot as SnapKey) : undefined });
     case 'get_creator_code_report': return tools.get_creator_code_report(ctx);
     case 'get_peer_benchmark':
       if (!isGroupId(a.group_id) || !isOfferId(a.offer_id)) return { ok: false, reason: 'Unknown group or offer.' };

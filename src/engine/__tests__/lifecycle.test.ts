@@ -4,6 +4,7 @@ import { DEFAULT_USER_SETTINGS } from '../../state/store';
 import { daysToProve } from '../review';
 import { accuracyRows, accuracySummary } from '../accuracy';
 import type { RayCtx } from '../../ray/tools';
+import { inr } from '../../lib/format';
 
 let ctx: RayCtx;
 beforeAll(async () => { ctx = await testCtx(); });
@@ -43,7 +44,7 @@ describe('lifecycle: weekly reviews, alerts, pilot decision', () => {
   });
   it('alerts: opportunity before approval; review, pilot and festive prompts after', () => {
     const before = derive(ctx.model, { settings: DEFAULT_USER_SETTINGS, approved: false, approvedSettings: null, overrides: {}, killed: false, moment: 'before' });
-    expect(before.alerts[0].title).toContain('₹33,845');
+    expect(before.alerts[0].title).toContain(inr(Math.abs(before.a10.profit)));
     const ids = live('day20').alerts.map((a) => a.id);
     expect(ids).toEqual(expect.arrayContaining(['review-w2', 'festive', 'pilot-10', 'nearbe-new_organic']));
     expect(live('day30').alerts.map((a) => a.id)).toContain('pilot-decision');
@@ -58,9 +59,12 @@ describe('lifecycle: weekly reviews, alerts, pilot decision', () => {
     const d = live('day20');
     expect(d.signals.filter((s) => s.breached).length).toBeGreaterThanOrEqual(3);
     expect(d.eligibility.every((e) => e.ok)).toBe(true);
-    expect(d.strategies.map((s) => Math.round(s.profit))).toEqual([Math.round(-33845 * 0.9), 5076, 21147]);
+    // v2: same shoppers (90%), same budget cap, same kept rate and margin; Smart Offers wins at the default margin.
+    expect(d.strategies.map((s) => Math.round(s.profit))).toEqual([-17174, 5915, 22595]);
+    expect(d.comparison.verdict).toBe('ai_wins');
+    for (const s of d.comparison.rows) expect(s.spend).toBeLessThanOrEqual(d.comparison.budget + 1e-6);
     expect(d.experiments.length).toBeGreaterThanOrEqual(3);
-    expect(Math.round(d.holdoutCostMonth)).toBe(2350);
+    expect(Math.round(d.holdoutCostMonth)).toBe(Math.round(d.draft.profit / 9));
   });
   it('prediction accuracy compares similar-store priors with measured ranges', () => {
     const d = live('day20');

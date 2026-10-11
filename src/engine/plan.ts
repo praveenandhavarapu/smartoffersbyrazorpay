@@ -9,6 +9,8 @@ import { breakEven, candidateOffers, NONE_ECON, perCheckout, type Econ } from '.
 export type PlanSettings = {
   budget: number;
   margin: number; // fraction, 0.40
+  /** v2: share of extra sales kept after returns and failed COD (default 1 = v1 maths). */
+  keptRate?: number;
   goal: Goal;
   ordersFloorPct: number; // used only with goal 'orders_steady'
   floorReturn?: number; // default break-even
@@ -74,7 +76,7 @@ export function storeOrders(groups: GroupStats[]) {
 function optsFor(g: GroupStats, s: PlanSettings, floor: number): Opt[] {
   const out: Opt[] = [{ offer: 'none', e: NONE_ECON }];
   for (const o of candidateOffers(g, s.allowedOffers)) {
-    const e = perCheckout(g, o, s.margin);
+    const e = perCheckout(g, o, s.margin, undefined, s.keptRate ?? 1);
     if (s.maxDiscountInr !== undefined && e.spend / Math.max(e.p, 1e-9) > s.maxDiscountInr) continue;
     if (e.ret >= floor - 1e-12) out.push({ offer: o, e });
   }
@@ -87,7 +89,7 @@ export function buildPlan(groups: GroupStats[], settings: Partial<PlanSettings> 
   const s: PlanSettings = { ...DEFAULT_SETTINGS, ...settings };
   const floor = s.floorReturn ?? breakEven(s.margin);
   const coverage = s.coverage ?? 1 - PROFILE.holdoutPct / 100;
-  const repeatValue = PROFILE.repeat.rate * PROFILE.repeat.aovInr * s.margin;
+  const repeatValue = PROFILE.repeat.rate * PROFILE.repeat.aovInr * s.margin * (s.keptRate ?? 1);
   const objective = (g: GroupStats, e: Econ) =>
     e.profit + (s.goal === 'new_customers' && NEW_GROUPS.includes(g.id) ? e.lift * repeatValue : 0);
 
@@ -137,7 +139,7 @@ export function buildPlan(groups: GroupStats[], settings: Partial<PlanSettings> 
   for (const g of groups) {
     const o = s.overrides?.[g.id];
     if (o && o !== choice.get(g.id)!.offer) {
-      choice.set(g.id, { offer: o, e: o === 'none' ? NONE_ECON : perCheckout(g, o, s.margin) });
+      choice.set(g.id, { offer: o, e: o === 'none' ? NONE_ECON : perCheckout(g, o, s.margin, undefined, s.keptRate ?? 1) });
       overridden.add(g.id);
     }
   }
@@ -196,7 +198,7 @@ function assemble(
   const extraOrders = rows.reduce((a, r) => a + r.extraOrders, 0);
   const oc = ordersChange(groups, extraOrders);
   return {
-    rows, spend, extraSales, extraOrders, ret: spend ? extraSales / spend : 0, profit: extraSales * s.margin - spend,
+    rows, spend, extraSales, extraOrders, ret: spend ? (extraSales * (s.keptRate ?? 1)) / spend : 0, profit: extraSales * (s.keptRate ?? 1) * s.margin - spend,
     orders: oc.orders, ordersChangePct: oc.pct, overBudget: spend > s.budget + 1e-6, infeasible, settings: s,
   };
 }
@@ -216,7 +218,8 @@ export function planRange(groups: GroupStats[], p: PlanResult, p25: Record<Group
       spend += r.covered * e.spend;
       sales += r.covered * e.extraSales;
     }
-    return { ret: spend ? sales / spend : 0, profit: sales * p.settings.margin - spend };
+    const k = p.settings.keptRate ?? 1;
+    return { ret: spend ? (sales * k) / spend : 0, profit: sales * k * p.settings.margin - spend };
   };
   const lo = run(p25), hi = run(p75);
   return { retLow: lo.ret, retHigh: hi.ret, profitLow: lo.profit, profitHigh: hi.profit };

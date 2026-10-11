@@ -1,5 +1,11 @@
 /** Reply templates for demo mode. Every number comes from a tool result passed in. */
 import { inr, inrSigned, num, pctSigned, xr } from '../lib/format';
+import { FEATURES } from '../config/features';
+
+/** "return after returns" in v2 (spec §5.3), "return" in v1. */
+const RET = FEATURES.netReturns ? 'return after returns' : 'return';
+/** Typical keep-per-₹1,000 guidance shown when a margin looks off. */
+export const KEEP_GUIDANCE = FEATURES.netReturns ? { low: 400, high: 600, text: 'Typical apparel D2C keeps ₹400–600 after product, shipping, packaging and payment' } : { low: 350, high: 550, text: 'Most fashion brands keep ₹350–550' };
 import { OFFER_BY_ID } from '../data/fixtures';
 import type { tools } from './tools';
 
@@ -34,9 +40,9 @@ export const T = {
     ? `**${a.inside_range} of ${a.total}** estimates made before launch fell inside the measured 90% range (day ${a.day}); median error **${num(a.median_error_pp, 1)} pp**.\n${top(a.groups.map((g) => `${g.group}: estimated +${num(g.estimate_pp, 1)} pp, measured ${g.measured_pp >= 0 ? '+' : ''}${num(g.measured_pp, 1)} pp`), 4)}`
     : 'Accuracy is measured once Smart Offers runs: the holdout checks every estimate made before launch.',
   pilot: (p: ReturnType<typeof tools.get_pilot_decision>, live: boolean) => live
-    ? `${p.days_left > 0 ? `The free pilot ends in **${p.days_left} days**.` : '**The free pilot has ended.**'} Expected **${inrSigned(p.expected_profit_month)} a month**, return ${xr(p.return_x)} (range ${xr(p.return_range[0])}–${xr(p.return_range[1])}).\n- Proven: at least **${num(p.proven_extra_orders_at_least)} extra orders** over ${p.pilot_day} days\n- Fee if billed: **${inr(p.fee)}** (${p.fee_rule})\nYour choice: keep, extend 15 days, or stop.`
+    ? `${p.days_left > 0 ? `The free pilot ends in **${p.days_left} days**.` : '**The free pilot has ended.**'} Expected **${inrSigned(p.expected_profit_month)} a month**, ${RET} ${xr(p.return_x)} (range ${xr(p.return_range[0])}–${xr(p.return_range[1])}).\n- Proven: at least **${num(p.proven_extra_orders_at_least)} extra orders** over ${p.pilot_day} days\n- Fee if billed: **${inr(p.fee)}** (${p.fee_rule})\nYour choice: keep, extend 15 days, or stop.`
     : 'The pilot decision comes 30 days after you approve a plan.',
-  impact: (m: ReturnType<typeof tools.get_impact_summary>) => `North star: **${m.north_star.metric}: ${inrSigned(m.north_star.value)}**.\n- Return **${xr(m.return_x)}** (break-even ${xr(m.break_even_x)})${m.estimates_inside_range ? `\n- Estimates inside measured range: **${m.estimates_inside_range}**` : ''}\n- Budget: **${inr(m.budget)}** a month, hard stop\nThe Impact tab in Agent Studio has the full metric tree and guardrails.`,
+  impact: (m: ReturnType<typeof tools.get_impact_summary>) => `North star: **${m.north_star.metric}: ${inrSigned(m.north_star.value)}**.\n- ${FEATURES.netReturns ? 'Return after returns' : 'Return'} **${xr(m.return_x)}** (break-even ${xr(m.break_even_x)})${m.cost_per_extra_order !== null ? `\n- Cost per extra order **${inr(m.cost_per_extra_order)}** (each earns ${inr(m.earned_per_extra_order)} after returns)` : ''}${m.estimates_inside_range ? `\n- Estimates inside measured range: **${m.estimates_inside_range}**` : ''}\n- Budget: **${inr(m.budget)}** a month, hard stop\nThe Impact tab in Agent Studio has the full metric tree and guardrails.`,
   experiments: (e: ReturnType<typeof tools.get_next_experiments>) => `Here's what I'd test next. Each is a hypothesis with its own holdout and needs your approval:\n${top(e.experiments.map((x) => `**${x.title}**: ${x.why}`), 4)}`,
   help: () => "Here's what I can help with: payments, settlements, refunds and disputes for any period; how your coupons are doing; setting up Smart Offers and testing a budget, margin or return target; explaining why a shopper group gets an offer; and pilot results against the holdout.",
   payments: (s: Pay) => `${s.window}: **${inr(s.collected)}** collected from **${num(s.captured_payments)}** payments (${num(s.success_rate_pct, 1)}% success rate, ${num(s.failed_payments)} failed). UPI ${num(s.method_mix.upi.share_pct, 0)}%, cards ${num(s.method_mix.card.share_pct, 0)}%. ${s.refunds ? `${num(s.refunds)} refunds (${inr(s.refunded)}).` : 'No refunds.'} Fees ${inr(s.fees)} + GST ${inr(s.gst_on_fees)}.`,
@@ -49,25 +55,25 @@ export const T = {
   },
   refunds: (r: Ref) => `${r.window}: ${num(r.refunds)} refunds, ${inr(r.refunded)}. Disputes: ${num(r.open_disputes)} open or under review out of ${num(r.disputes_all_time.length)} in six months.`,
 
-  waste: (w: Waste) => `**${w.code} cost ${inr(w.spend)} last month** and brought ${inr(w.extra_sales)} of extra sales: ${xr(w.return_x)} against a ${xr(w.break_even_x)} break-even, so it lost **${inr(Math.abs(w.profit))}**. ${inr(w.to_returning)} of it went to returning buyers who would have bought anyway.`,
+  waste: (w: Waste) => `**${w.code} cost ${inr(w.spend)} last month** and brought ${inr(w.extra_sales)} of extra sales: ${xr(w.return_x)} ${RET} against a ${xr(w.break_even_x)} break-even, so it ${w.profit < 0 ? `lost **${inr(Math.abs(w.profit))}**` : `made **${inr(w.profit)}**`}.${w.cost_per_extra_order !== null ? ` It paid **${inr(w.cost_per_extra_order)}** in discounts for each order it created; each order earns you ${inr(w.earned_per_extra_order)} after returns.` : ''} ${inr(w.to_returning)} of it went to returning buyers who would have bought anyway.`,
 
   plan: (s: Sim) => {
     const on = offersOn(s);
-    return `Here's the plan: offers for ${on.length} of ${s.rows.length} shopper groups, **${inr(s.spend)}** spend of your ${inr(s.budget)} budget, **${inr(s.extra_sales)}** extra sales at **${xr(s.return_x)}** (likely ${xr(s.return_range[0])}–${xr(s.return_range[1])}), about **${inrSigned(s.profit)} a month**. Nothing goes live until you click Approve.`;
+    return `Here's the plan: offers for ${on.length} of ${s.rows.length} shopper groups, **${inr(s.spend)}** spend of your ${inr(s.budget)} budget, **${inr(s.extra_sales)}** extra sales at **${xr(s.return_x)}** ${RET} (likely ${xr(s.return_range[0])}–${xr(s.return_range[1])}), about **${inrSigned(s.profit)} a month**. Nothing goes live until you click Approve.`;
   },
 
-  floorPushback: (want: number, s: Sim, s3: Sim | null) => {
+  floorPushback: (want: number, s: Sim, s3: Sim | null, altFloor = 3) => {
     const on = offersOn(s).length;
     const head = on === 0
       ? `At ${xr(want, 1)} no offer qualifies, so every group goes to no offer and orders fall ${pctSigned(s.orders_change_pct)} versus today.`
       : `At ${xr(want, 1)} only ${on} group${on > 1 ? 's' : ''} keep an offer: ${inrSigned(s.profit)} a month, orders ${pctSigned(s.orders_change_pct)} versus today.`;
-    const alt = s3 ? ` A 3x floor keeps ${offersOn(s3).length} offers (${inrSigned(s3.profit)}, orders ${pctSigned(s3.orders_change_pct)}); "Most profit" makes the most money while staying above break-even.` : '';
+    const alt = s3 ? ` A ${xr(altFloor, 1)} floor keeps ${offersOn(s3).length} offer${offersOn(s3).length === 1 ? '' : 's'} (${inrSigned(s3.profit)}, orders ${pctSigned(s3.orders_change_pct)}); "Most profit" makes the most money while staying above break-even.` : '';
     return head + alt + ' Which would you like?';
   },
 
   floorResult: (want: number, s: Sim) => `With a ${xr(want, 1)} floor: ${inr(s.spend)} spend, ${inrSigned(s.profit)} a month, orders ${num(s.orders)} (${pctSigned(s.orders_change_pct)} versus today). This is a preview; your plan is unchanged.`,
 
-  marginWarn: (pct: number) => `${num(pct)}% is unusual: most fashion brands keep ₹350–550 of a ₹1,000 sale (35–55%) after product, shipping, packaging and payment costs. A wrong margin flips which offers pay back. Can you confirm it?`,
+  marginWarn: (pct: number) => `${num(pct)}% is unusual. ${KEEP_GUIDANCE.text} of a ₹1,000 sale (${KEEP_GUIDANCE.low / 10}–${KEEP_GUIDANCE.high / 10}%). A wrong margin flips which offers pay back. Can you confirm it?`,
 
   marginNone: (pct: number, oldProfit: number) => `At ${num(pct)}% margin no offer pays back (break-even rises to ${xr(100 / pct)}); the honest plan is no offers. The current plan would make ${inrSigned(oldProfit)} a month at that margin.`,
 
@@ -75,12 +81,14 @@ export const T = {
 
   budget: (b: number, s: Sim) => `With ${inr(b)}: ${inr(s.spend)} spend, ${inr(s.extra_sales)} extra sales, ${inrSigned(s.profit)} a month, orders ${num(s.orders)} (${pctSigned(s.orders_change_pct)}). Offers kept: ${offersOn(s).map((r) => `${r.label.split(' · ').slice(0, 2).join(' · ')}: ${r.offer_label}`).join('; ') || 'none'}.`,
 
-  override: (label: string, offer: string, d: { spend: number; extraOrders: number; ret: number; profit: number }) =>
-    `Drafted: ${label} gets ${offer}. It would cost **${inr(d.spend)} a month** for ${num(d.extraOrders, 1)} extra orders, a ${xr(d.ret)} return: **${inrSigned(d.profit)} a month**. I've only drafted it; it needs your Approve.`,
+  override: (label: string, offer: string, d: { spend: number; extraOrders: number; ret: number; profit: number; vsNow?: { spend: number; extraOrders: number; profit: number } }) =>
+    d.spend === 0 && d.vsNow
+      ? `Drafted: ${label} gets no offer. It **saves ${inr(-d.vsNow.spend)} a month** in discounts for about ${num(Math.abs(d.vsNow.extraOrders))} fewer orders: profit change **${inrSigned(d.vsNow.profit)} a month**. I've only drafted it; it needs your Approve.`
+      : `Drafted: ${label} gets ${offer}. It would cost **${inr(d.spend)} a month** for about ${num(d.extraOrders)} extra orders, ${xr(d.ret)} ${RET}: **${inrSigned(d.profit)} a month**${d.vsNow ? ` (${inrSigned(d.vsNow.profit)} vs now)` : ''}. I've only drafted it; it needs your Approve.`,
 
-  noPromise: (c: Current) => `I can't promise an exact figure. Expected: **${inrSigned(c.profit)} a month** (likely ${inrSigned(c.profit_range[0])} to ${inrSigned(c.profit_range[1])}), return ${xr(c.return_x)} (likely ${xr(c.return_range[0])}–${xr(c.return_range[1])}). The holdout will measure your own numbers, and early weeks are still learning.`,
+  noPromise: (c: Current) => `I can't promise an exact figure. Expected: **${inrSigned(c.profit)} a month** (likely ${inrSigned(c.profit_range[0])} to ${inrSigned(c.profit_range[1])}), ${RET} ${xr(c.return_x)} (likely ${xr(c.return_range[0])}–${xr(c.return_range[1])}). The holdout will measure your own numbers, and early weeks are still learning.`,
 
-  results: (r: Results) => `Day ${r.days}: ${inr(r.spend)} spent, **${num(r.extra_orders, 1)} extra orders** (90% range ${num(r.extra_orders_range[0])}–${num(r.extra_orders_range[1])}), return ${xr(r.return_x)} (range ${xr(r.return_range[0])}–${xr(r.return_range[1])}), ${inrSigned(r.profit)} so far. ${r.still_learning_groups.length} offer groups are still learning, so profitability isn't proven yet.`,
+  results: (r: Results) => `Day ${r.days}${r.projection ? ' (projection)' : ''}: ${inr(r.spend)} spent, **${num(r.extra_orders)} extra orders** (90% range ${num(r.extra_orders_range[0])}–${num(r.extra_orders_range[1])}), ${RET} ${xr(r.return_x)} (range ${xr(r.return_range[0])}–${xr(r.return_range[1])}), ${inrSigned(r.profit)} so far.${r.cost_per_extra_order !== null ? ` Cost per extra order **${inr(r.cost_per_extra_order)}** vs ${inr(r.earned_per_extra_order)} earned.` : ''} ${r.proof}`,
 
   creators: (c: Creators) => {
     const flagged = c.codes.filter((x) => x.flag);

@@ -6,6 +6,8 @@ import type { GroupId, OfferId } from '../data/types';
 import { tools, type Draft, type RayCtx, type ToolCall } from './tools';
 import { T } from './templates';
 import { MAX_DISCOUNT_PER_ORDER } from '../engine/guardrails';
+import { DEFAULT_KEEP_PER_1000 } from '../engine/net';
+import { FEATURES } from '../config/features';
 
 export type QuickReply = { label: string; message: string };
 export type RayCard =
@@ -243,10 +245,18 @@ export function route(message: string, ctx: RayCtx): RayReply {
     if (/what about|try|show|use|how about/.test(t) && want < 4) {
       return reply('floor_preview', T.floorResult(want, s), { card: { kind: 'sim', title: `${want}x floor (preview)`, sim: s } });
     }
-    const s3 = want > 3 ? call('simulate_plan', { floor_return: 3 }, () => tools.simulate_plan(ctx, { floor_return: 3 })) : null;
-    return reply('floor_pushback', T.floorPushback(want, s, s3), {
+    // Suggest the highest half-step floor below the ask that still keeps an offer (3x in v1).
+    let alt = 3;
+    if (FEATURES.netReturns) {
+      alt = 0;
+      for (let f = Math.floor(want * 2) / 2 - 0.5; f > ctx.derived.breakEven; f -= 0.5) {
+        if (tools.simulate_plan(ctx, { floor_return: f }).rows.some((r) => r.offer !== 'none')) { alt = f; break; }
+      }
+    }
+    const s3 = alt && want > alt ? call('simulate_plan', { floor_return: alt }, () => tools.simulate_plan(ctx, { floor_return: alt })) : null;
+    return reply('floor_pushback', T.floorPushback(want, s, s3, alt), {
       card: { kind: 'sim', title: `${want}x floor (preview)`, sim: s },
-      quick: [{ label: 'What about 3x?', message: 'What about 3x?' }, { label: 'Keep most profit', message: 'Show me the most-profit plan' }],
+      quick: [...(s3 ? [{ label: `What about ${alt}x?`, message: `What about ${alt}x?` }] : []), { label: 'Keep most profit', message: 'Show me the most-profit plan' }],
     });
   }
 
@@ -259,13 +269,13 @@ export function route(message: string, ctx: RayCtx): RayReply {
       if (pct < 20 || pct > 65) {
         return reply('margin_warning', T.marginWarn(pct), {
           card: { kind: 'draft', draft: { type: 'settings', patch: { keepPer1000: Math.round(pct * 10) }, summary: `Use ${pct}% margin (keep ₹${Math.round(pct * 10)} of ₹1,000)` } },
-          quick: [{ label: 'Keep ₹400 (40%)', message: 'Show me the most-profit plan' }],
+          quick: [{ label: `Keep ₹${DEFAULT_KEEP_PER_1000} (${DEFAULT_KEEP_PER_1000 / 10}%)`, message: 'Show me the most-profit plan' }],
         });
       }
       const s = call('simulate_plan', { margin_pct: pct }, () => tools.simulate_plan(ctx, { margin_pct: pct }));
       if (s.rows.every((r) => r.offer === 'none')) {
         const cur = call('get_current_plan', {}, () => tools.get_current_plan(ctx));
-        const oldProfit = cur.extra_sales * (pct / 100) - cur.spend;
+        const oldProfit = cur.extra_sales * ctx.derived.kept * (pct / 100) - cur.spend;
         return reply('margin_none', T.marginNone(pct, oldProfit), { card: { kind: 'sim', title: `${pct}% margin (preview)`, sim: s } });
       }
       return reply('margin_sim', T.marginResult(pct, s), { card: { kind: 'sim', title: `${pct}% margin (preview)`, sim: s } });
@@ -322,7 +332,7 @@ export function route(message: string, ctx: RayCtx): RayReply {
   }
 
   if (/\bresults?\b|\bholdout\b|\bworking\b|\bproof\b|\bhow (is|are) (it|the offers|offers|things) (doing|going)\b|\bso far\b/.test(t)) {
-    const r = call('get_results', { snapshot: 'day20' }, () => tools.get_results(ctx, { snapshot: 'day20' }));
+    const r = call('get_results', {}, () => tools.get_results(ctx, {}));
     if (!ctx.approved) return reply('results', 'Smart Offers is not live yet, so there are no measured results. Set it up first; results are measured against a 10% holdout once it runs.', { quick: [{ label: 'Set up Smart Offers', message: 'Set up Smart Offers' }] });
     return reply('results', T.results(r), { card: { kind: 'results', data: r }, quick: FOLLOW_UPS.results });
   }

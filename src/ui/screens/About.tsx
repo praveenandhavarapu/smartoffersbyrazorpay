@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useModel } from '../../state/ModelContext';
 import { inr, inrSigned, num, pctOf, xr } from '../../lib/format';
 import { PageHeader } from '../components/kit';
+import { FEATURES } from '../../config/features';
 
 const CANDIDATES: { problem: string; size: number; measurable: number; unsolved: number; fit: number; note: string }[] = [
   { problem: 'Always-on coupons paid to buyers who would buy anyway', size: 4, measurable: 5, unsolved: 5, fit: 5, note: 'Chosen. Large, invisible today, provable with a holdout, and it lives at checkout where Razorpay already is.' },
@@ -24,7 +25,7 @@ export function About() {
       <section className="card pad">
         <h2>The problem in one line</h2>
         <p className="lead">D2C fashion brands pay always-on coupons to shoppers who would have bought anyway, and they can't see it, because nothing measures what a discount actually adds.</p>
-        <p>For the demo store, {p.displayName}: last month ALPHA10 cost <b>{inr(derived.a10.spend)}</b> and returned <b>{xr(derived.a10.ret)}</b> against a {xr(derived.breakEven)} break-even, a loss of <b>{inr(Math.abs(derived.a10.profit))}</b>. {ret && <>{pctOf(ret.spend / derived.a10.spend, 0)} of it went to returning buyers, who buy {num(model.groups.find((g) => g.id === 'returning')!.baseConversion * 100)} times in 100 without any offer.</>} All coupons together were <b>{pctOf(derived.store.discountShare)}</b> of sales.</p>
+        <p>For the demo store, {p.displayName}: last month ALPHA10 cost <b>{inr(derived.a10.spend)}</b> and returned <b>{xr(derived.a10.ret)}</b>{FEATURES.netReturns ? ' after returns' : ''} against a {xr(derived.breakEven)} break-even, a loss of <b>{inr(Math.abs(derived.a10.profit))}</b>. {ret && <>{pctOf(ret.spend / derived.a10.spend, 0)} of it went to returning buyers, who buy {num(model.groups.find((g) => g.id === 'returning')!.baseConversion * 100)} times in 100 without any offer.</>} All coupons together were <b>{pctOf(derived.store.discountShare)}</b> of sales.</p>
         <p className="small muted">Size of the opportunity (assumptions to validate with Razorpay data): the target cohort is Instagram- and creator-led fashion brands selling ₹20–50 lakh a month on Magic Checkout with an always-on code. If a typical store wastes a similar share, the saving is roughly the {inr(Math.abs(derived.a10.profit))} a month shown here, per store, before any growth from better-targeted offers.</p>
       </section>
 
