@@ -43,7 +43,7 @@ export function WhyPlaybook({ group, offer }: { group: GroupId; offer: OfferId }
   );
 }
 
-function AddChallenger({ row }: { row: PlaybookRow }) {
+export function AddChallenger({ row }: { row: PlaybookRow }) {
   const decisions = useStore((s) => s.learningDecisions);
   const decide = useStore((s) => s.decideLearning);
   const approved = useStore((s) => s.approved);

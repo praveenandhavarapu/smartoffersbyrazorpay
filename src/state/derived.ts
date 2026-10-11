@@ -64,7 +64,7 @@ export const todaySnap = (m: Moment): SnapKey | null => (m === 'day20' ? 'day20'
 export function settingsDiff(a: Settings, b: Settings): string[] {
   const out: string[] = [];
   if (a.budget !== b.budget) out.push(`Budget ${inr(a.budget)} → ${inr(b.budget)}`);
-  if (a.keepPer1000 !== b.keepPer1000) out.push(`Keep per ₹1,000 ${inr(a.keepPer1000)} → ${inr(b.keepPer1000)}`);
+  if (a.keepPer1000 !== b.keepPer1000) out.push(`What you keep from ₹1,000 ${inr(a.keepPer1000)} → ${inr(b.keepPer1000)}`);
   if (a.goal !== b.goal) out.push(`Goal ${GOAL_LABEL[a.goal]} → ${GOAL_LABEL[b.goal]}`);
   if (a.goal === 'orders_steady' && b.goal === 'orders_steady' && a.ordersFloorPct !== b.ordersFloorPct) out.push(`Orders may fall at most ${a.ordersFloorPct}% → ${b.ordersFloorPct}%`);
   const added = b.allowedOffers.filter((o) => !a.allowedOffers.includes(o)), removed = a.allowedOffers.filter((o) => !b.allowedOffers.includes(o));

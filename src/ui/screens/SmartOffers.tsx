@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../../state/store';
 import { useChat } from '../../ray/chatStore';
@@ -11,6 +12,8 @@ import { PageHeader, Tabs } from '../components/kit';
 import { Clover } from '../components/Icons';
 import { FEATURES } from '../../config/features';
 import { PlaybookCard } from '../components/Playbook';
+import { RecommendCard } from '../components/Recommend';
+import { TradeoffCard } from '../components/Tradeoffs';
 
 type Tab = 'overview' | 'plan' | 'checkout' | 'creators';
 
@@ -22,6 +25,12 @@ export function SmartOffers() {
   const tab = (sp.get('tab') as Tab) ?? (approved ? 'overview' : 'overview');
   const setTab = (t: Tab) => setSp({ tab: t });
   const askRay = (q: string) => { queue(q); nav('/ray'); };
+  const focus = sp.get('focus');
+  useEffect(() => {
+    if (!focus) return;
+    const t = setTimeout(() => document.getElementById(focus)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
+    return () => clearTimeout(t);
+  }, [focus, tab]);
   return (
     <div className="page wide">
       <PageHeader title="Smart Offers" sub="An offer, or none, for each shopper group, chosen for profit within your budget and proven against a 10% holdout." actions={
@@ -40,7 +49,7 @@ export function SmartOffers() {
           <div className="card pad hint-row"><span>Prefer a conversation? Ray asks four questions and builds the same plan.</span><button className="btn primary sm" onClick={() => askRay('Set up Smart Offers')}>Set up with Ray</button></div>
         </div>
       ))}
-      {tab === 'plan' && <div className="narrow stack-gap"><SetupCard /><PlanCard onAsk={askRay} />{approved && <ApprovedCard />}{FEATURES.playbook && <PlaybookCard />}<WhyAI /></div>}
+      {tab === 'plan' && <div className="narrow stack-gap"><SetupCard /><PlanCard onAsk={askRay} />{approved && <ApprovedCard />}<RecommendCard /><TradeoffCard />{FEATURES.playbook && <PlaybookCard />}<WhyAI /></div>}
       {tab === 'checkout' && <Checkout />}
       {tab === 'creators' && <div className="narrow"><CreatorsCard /></div>}
     </div>
