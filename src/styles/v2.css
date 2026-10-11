@@ -103,3 +103,6 @@
 .prepaid td.bad { color: var(--red); font-weight: 600; }
 .side .prepaid { padding: 14px; }
 .pay-nudge { margin: 6px 0 0; padding: 8px 10px; border: 1px dashed var(--blue); border-radius: 8px; background: var(--blue-soft); font-size: 12.5px; display: grid; gap: 2px; }
+/* Phase 8: About */
+.about-v2 a { color: var(--blue); }
+.about-v2 .pos-line { border-left: 3px solid var(--blue); padding-left: 10px; }

@@ -93,3 +93,12 @@ describe('Phase 2: hero metric and AI framing', () => {
     expect(await page('/about')).toContain('How the AI works');
   }, 30000);
 });
+
+describe('Phase 8: About v2', () => {
+  it('adds evidence, positioning, principles, audience, exclusions and roadmap, keeping the original brief', async () => {
+    const text = await page('/about');
+    for (const h of ['How we chose it', 'What we deliberately did not build', 'Why this matters', 'How merchants run offers today', "Built for Agent Studio's principles", "Who it's for", 'What we chose not to build', 'Roadmap']) expect(text).toContain(h);
+    expect(text).toContain("Magic Checkout's Offer Engine decides which coupon to show. Smart Offers decides whether a discount is worth paying for at all, and proves it.");
+    expect(text).toMatch(/US CPG data/);
+  }, 20000);
+});

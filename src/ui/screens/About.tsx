@@ -5,6 +5,7 @@ import { inr, inrSigned, num, pctOf, xr } from '../../lib/format';
 import { PageHeader } from '../components/kit';
 import { FEATURES } from '../../config/features';
 import { HowAIWorks } from '../components/HowAIWorks';
+import { AboutV2 } from '../components/AboutV2';
 
 const CANDIDATES: { problem: string; size: number; measurable: number; unsolved: number; fit: number; note: string }[] = [
   { problem: 'Always-on coupons paid to buyers who would buy anyway', size: 4, measurable: 5, unsolved: 5, fit: 5, note: 'Chosen. Large, invisible today, provable with a holdout, and it lives at checkout where Razorpay already is.' },
@@ -113,6 +114,7 @@ export function About() {
           </ul>
         </div>
       </section>
+      {FEATURES.aboutV2 && <AboutV2 />}
     </div>
   );
 }

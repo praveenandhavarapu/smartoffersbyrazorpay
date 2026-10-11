@@ -146,3 +146,17 @@ How the v2 build was made: what the AI (Claude Code) did, which decisions came f
 - **From the spec (Praveen):** snapshot contents, drafts with diff, true guardrail list, scenario titles, chip wording.
 - **Assumed:** "My margin is 45%" is treated as a change (draft); "What if my margin is 45%" stays a scenario. Ray's day is the day selected on Results.
 - **Time:** ~45 min.
+
+## Phase 8 — About: evidence and positioning (11 Oct 2026)
+
+- **AI did:** `AboutV2` sections below the existing brief (kept intact):
+  - Why this matters, with the six sources linked and CPG/US data labelled.
+  - How merchants run offers today, with the positioning line against Magic Checkout's Offer Engine.
+  - The Agent Studio principles table.
+  - Who it's for, with this store's Proof mode and Playbook mode groups computed.
+  - What we chose not to build.
+  - Roadmap.
+  - A render test.
+- **From the spec (Praveen):** all section content and links (paraphrased as given).
+- **Assumed:** the links were provided in the spec. They were not re-fetched from this environment (network policy), so they are shown as given.
+- **Time:** ~20 min.

@@ -89,6 +89,8 @@ How AI tools were used, what they did, how they sped up the work, and where I ma
 
 - Phase 7 (flag `rayV2`): Ray reads one engine snapshot (new tool), budget/margin/goal changes are drafts with a diff, scenario titles, named guardrails, four new chips. Model/keys unchanged. Tests 162 passing; build passes.
 
+- Phase 8 (flag `aboutV2`): About adds evidence with sources, today's offer tools and positioning, Agent Studio principles, who it's for (proof vs playbook), exclusions and roadmap. Tests 163 passing; build passes.
+
 <!-- Claude Code adds unclear spec points here with the option it chose. -->
 - v2 §10 defaults say COD fails 28%; the fixture says Alpha's failed-COD rate is 22% (and the 81% kept rate uses it). Chose: the fixture's 22% everywhere. At 22% a blanket ₹50 prepaid discount loses in all 6 groups; the insight copy is computed and says so.
 - v2 §7.2's decision rule ("challenger lower bound ≥ champion − tolerance") cannot promote with ~38 challenger shoppers. Chose: blend the store's result with the playbook (same trust weighting as the plan) and require cost lower, profit per shopper at least equal, and the store's lift gap within noise.
