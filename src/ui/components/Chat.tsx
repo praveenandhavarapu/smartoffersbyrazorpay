@@ -79,7 +79,9 @@ export function DraftCard({ draft }: { draft: Draft }) {
         <p>{draft.groupLabel}: <OfferChip offer={draft.from} muted /> → <OfferChip offer={draft.offer} />. Cost {inr(draft.spend)} / month for about {num(draft.extraOrders)} extra orders ({xr(draft.ret)}{FEATURES.netReturns ? ' after returns' : ''}): <b className={draft.profit < 0 ? 'bad' : 'good'}>{inrSigned(draft.profit)} / month</b>{draft.vsNow ? <> ({inrSigned(draft.vsNow.profit)} vs now)</> : null}.</p>
       ))}
       {draft.type === 'pause' && <p>Pause {draft.scope === 'all' ? 'all Smart Offers' : draft.scope}. Shoppers see the store default checkout.</p>}
-      {draft.type === 'settings' && <p>{draft.summary}</p>}
+      {draft.type === 'settings' && (FEATURES.rayV2 && draft.summary.includes('→')
+        ? <><p className="small">Changes (draft, not live until you approve):</p><ul className="small">{draft.summary.split('; ').map((x) => <li key={x}>{x}</li>)}</ul></>
+        : <p>{draft.summary}</p>)}
       <div className="btns">
         <button className="btn primary sm" onClick={approve}>{draft.type === 'pause' ? 'Confirm pause' : 'Approve'}</button>
         <button className="btn secondary sm" onClick={() => setState('dismissed')}>Cancel</button>

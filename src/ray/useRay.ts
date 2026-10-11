@@ -8,6 +8,7 @@ import { question, parseAnswer, SETUP_ORDER } from './setupFlow';
 import { T } from './templates';
 import { tools, type Draft, type RayCtx, type ToolCall } from './tools';
 import { ledgerView } from '../data/ledgerQueries';
+import { FEATURES } from '../config/features';
 
 const draftSummary = (d: Draft) => (d.type === 'override' ? `Drafted: ${d.group} → ${d.offer}` : d.type === 'pause' ? `Drafted pause (${d.scope})` : `Drafted: ${d.summary}`);
 
@@ -24,7 +25,7 @@ function cardsFromCalls(calls: ToolCall[]): { cards: RayCard[]; quick: QuickRepl
       case 'list_payments': byKind.set('list', { kind: 'payments_list', title: 'Payments', data: r as never }); quick = FOLLOW_UPS.payments; break;
       case 'get_settlements': byKind.set('settlements', { kind: 'settlements', data: r as never }); quick = FOLLOW_UPS.settlements; break;
       case 'get_refunds_and_disputes': byKind.set('refunds', { kind: 'refunds', data: r as never }); quick = FOLLOW_UPS.refunds; break;
-      case 'simulate_plan': byKind.set('sim', { kind: 'sim', title: 'Plan preview (not applied)', sim: r as never }); quick = FOLLOW_UPS.plan; break;
+      case 'simulate_plan': byKind.set('sim', { kind: 'sim', title: FEATURES.rayV2 ? 'Scenario (not applied)' : 'Plan preview (not applied)', sim: r as never }); quick = FOLLOW_UPS.plan; break;
       case 'get_current_plan': byKind.set('sim', { kind: 'sim', title: 'Current plan', sim: r as never }); quick = FOLLOW_UPS.plan; break;
       case 'get_offer_waste': byKind.set('waste', { kind: 'waste' }); quick = FOLLOW_UPS.offers; break;
       case 'get_results': byKind.set('results', { kind: 'results', data: r as never }); quick = FOLLOW_UPS.results; break;
@@ -36,7 +37,7 @@ function cardsFromCalls(calls: ToolCall[]): { cards: RayCard[]; quick: QuickRepl
       case 'get_pilot_decision': byKind.set('decision', { kind: 'decision' }); quick = FOLLOW_UPS.results; break;
       case 'get_impact_summary': byKind.set('impact', { kind: 'impact' }); quick = FOLLOW_UPS.results; break;
       case 'get_next_experiments': byKind.set('experiments', { kind: 'experiments' }); quick = FOLLOW_UPS.results; break;
-      case 'draft_plan_change': case 'request_pause': { const d = (r as { draft?: Draft }).draft; if (d) byKind.set('draft', { kind: 'draft', draft: d }); break; }
+      case 'draft_plan_change': case 'request_pause': case 'draft_settings_change': { const d = (r as { draft?: Draft }).draft; if (d) byKind.set('draft', { kind: 'draft', draft: d }); break; }
       default: break;
     }
   }
@@ -51,7 +52,7 @@ export function useRay() {
     if (!text.trim() || chat.busy) return;
     // Read the latest inputs at call time (the demo player calls this several times in a row).
     const st = useStore.getState();
-    const ctx: RayCtx = { model, derived, settings: st.settings, approved: st.approved, killed: st.killed, ledger: ledgerView(st.moment, st.instantSettlements), settlementMode: st.settlementMode, instant: st.instantSettlements };
+    const ctx: RayCtx = { model, derived, settings: st.settings, approved: st.approved, killed: st.killed, ledger: ledgerView(st.moment, st.instantSettlements), settlementMode: st.settlementMode, instant: st.instantSettlements, day: st.snapshot, reviewDecisions: st.reviewDecisions };
     const rayMode = st.rayMode;
     chat.push({ role: 'user', text });
     const festive = model.profile.upcomingDrop.name;

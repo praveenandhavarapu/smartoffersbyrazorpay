@@ -132,3 +132,17 @@ How the v2 build was made: what the AI (Claude Code) did, which decisions came f
   - The prepaid test starts the day after the merchant approves it, because it is merchant-initiated.
   - Failed deliveries avoided are reported but not yet added to profit.
 - **Time:** ~40 min.
+
+## Phase 7 — Ray upgrades (11 Oct 2026)
+
+- **AI did:**
+  - New tool `get_engine_snapshot` (`src/ray/snapshot.ts`). It is one compact snapshot of approved and draft settings with the diff, the live plan, results for the selected day, ALPHA10's cost per order, the Why-AI comparison, experiments, the timeline, waiting-on-you items, the playbook, decisions served and the prepaid insight. Live and Demo both read it.
+  - New tool `draft_settings_change`: budget, margin and goal changes become a draft with a diff, applied only through Approve → `approveChanges` (logged).
+  - Demo intents for the four new chips, all templated over the snapshot.
+  - "What if" cards are titled "Scenario: … (not applied)".
+  - Named-guardrail refusals: monthly budget hard stop, no shopper messaging, no price changes, max discount per order; protected attributes were already declined.
+  - System prompt rules 9–11 tell Ray to quote only snapshot numbers, draft changes and name guardrails. The model, keys and the function's auth are untouched.
+  - 12 tests.
+- **From the spec (Praveen):** snapshot contents, drafts with diff, true guardrail list, scenario titles, chip wording.
+- **Assumed:** "My margin is 45%" is treated as a change (draft); "What if my margin is 45%" stays a scenario. Ray's day is the day selected on Results.
+- **Time:** ~45 min.

@@ -19,6 +19,7 @@ type Pay = ReturnType<typeof tools.get_payments_summary>;
 type Daily = ReturnType<typeof tools.get_daily_payments>;
 type Setl = ReturnType<typeof tools.get_settlements>;
 type Ref = ReturnType<typeof tools.get_refunds_and_disputes>;
+type Snap = ReturnType<typeof tools.get_engine_snapshot>;
 
 const offersOn = (s: Sim) => s.rows.filter((r) => r.offer !== 'none');
 
@@ -109,4 +110,19 @@ export const T = {
     `${r.shopper} is in "${r.group_label}" and sees ${r.offer_label.toLowerCase()}. ${r.reason}`,
   storeSummary: (s: ReturnType<typeof tools.get_store_summary>) => `Last month (${s.period}): ${inr(s.sales)} sales from ${num(s.orders)} orders (${num(s.checkout_conversion_pct, 1)}% of ${num(s.checkouts)} checkouts), AOV ${inr(s.aov)}. Discounts were ${inr(s.discounts)} (${num(s.discount_share_pct, 1)}% of sales).`,
   offerName: (o: keyof typeof OFFER_BY_ID) => OFFER_BY_ID[o].label,
+
+  // ---- v2 (rayV2): answers over the engine snapshot ----
+  a10PerOrder: (x: Snap) => x.alpha10_last_month.cost_per_extra_order === null ? 'ALPHA10 created no measurable extra orders last month.'
+    : `ALPHA10 paid **${inr(x.alpha10_last_month.cost_per_extra_order)}** in discounts for every order it created; each extra order earns you **${inr(x.money_basis.earned_per_extra_order)}** after returns.\n- Lost **${inr(Math.abs(x.alpha10_last_month.profit_after_returns))}** last month\n- **${inr(x.alpha10_last_month.discount_to_buyers_who_would_buy_anyway)}** went to buyers who'd have bought anyway${x.plan.cost_per_extra_order !== null ? `\n- Smart Offers plan: **${inr(x.plan.cost_per_extra_order)}** per extra order` : ''}\nWant to see the plan?`,
+  testing: (x: Snap) => {
+    const running = x.experiments.filter((e) => e.challenger && (e.status === 'running' || e.status === 'waiting' || e.status === 'proposed'));
+    if (!running.length) return x.status.startsWith('not') ? 'Nothing yet: tests start after you approve a plan and the experiment space.' : 'No challenger is running right now; the holdout keeps measuring every group.';
+    return `**${running.length} test${running.length > 1 ? 's' : ''}** in the loop; the ${x.money_basis.holdout_pct}% holdout is never used for them.\n${top(running.map((e) => `${e.group}: **${e.champion}** vs **${e.challenger}** (${e.status === 'running' ? `day ${e.days_running}${e.decision_date ? `, decision ${e.decision_date}` : ''}` : 'waiting on you'})${e.read ? `, ${num(e.read.champion_lift_pp, 1)} vs ${num(e.read.challenger_lift_pp, 1)} pp` : ''}`), 4)}\nOpen Agent Studio → Experiments for the details.`;
+  },
+  cartAgent: (x: Snap) => !x.decisions_served_to_other_agents ? 'Once your plan is live, the Cart Abandonment agent asks Smart Offers before offering any discount, and gets only what your plan allows.'
+    : `Only where it pays: **${num(x.decisions_served_to_other_agents.no_discount_share_pct)}%** of its requests this month got "no discount needed".\n- **${num(x.decisions_served_to_other_agents.requests_this_month)}** requests; **${inr(x.decisions_served_to_other_agents.discount_avoided)}** of discount avoided\n${x.decisions_served_to_other_agents.example ? `- ${x.decisions_served_to_other_agents.example.shopper} (${x.decisions_served_to_other_agents.example.group}) asked for ${x.decisions_served_to_other_agents.example.asked}: **${x.decisions_served_to_other_agents.example.answer}**` : ''}\nThe holdout applies to recovery decisions too.`,
+  storesLikeMine: (x: Snap) => !x.playbook_stores_like_yours ? 'Playbook data is off in this build.'
+    : `What **worked** in tests at ${num(x.playbook_stores_like_yours.stores)} stores like yours (not what they charge):\n${top(x.playbook_stores_like_yours.rows.filter((r) => (r.beat_no_offer_pct ?? 100) >= 50).slice(0, 4).map((r) => `${r.group}: **${r.offer}** ${r.median_lift_pp >= 0 ? '+' : ''}${num(r.median_lift_pp, 1)} pp${r.beat_no_offer_pct !== null ? `, beat no offer in ${r.beat_no_offer_pct}% of ${r.stores_tested}` : ''}${r.on_your_menu ? '' : ' (not on your menu)'}`), 4)}\nIllustrative network data (synthetic). Add any as a challenger from Setup & plan.`,
+  settingsDraft: (diff: string[], profit: number, spend: number) => `Drafted: **${diff[0] ?? 'no change'}**${diff.length > 1 ? ` (+${diff.length - 1} more)` : ''}. The plan would spend ${inr(spend)} for **${inrSigned(profit)} a month** after returns. Nothing changes until you click Approve.`,
+  guardrail: (name: string, why: string) => `I can't do that: it breaks the **${name}** guardrail. ${why} I can draft something inside your guardrails instead.`,
 };

@@ -32,7 +32,7 @@ export function WasteCard({ onFix }: { onFix: () => void }) {
           <div key={r.group} style={{ borderColor: COLORS[r.group] }}>
             {shortGroup(model.groups.find((g) => g.id === r.group)!.label)}
             <b>{inr(r.spend)}</b>
-            <span className={r.ret < 1 ? 'bad' : ''}>{xr(r.ret)} return{r.ret < derived.breakEven ? ' · below break-even' : ''}</span>
+            <span className={r.ret < 1 ? 'bad' : ''}>{xr(r.ret)} {FEATURES.netReturns ? 'after returns' : 'return'}{r.ret < derived.breakEven ? ' · below break-even' : ''}</span>
           </div>
         ))}
       </div>

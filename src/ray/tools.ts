@@ -20,7 +20,8 @@ import { dailySeries, lastDays, paymentSummary, settlementSummary, unsettledBala
 import { fmtDate } from '../lib/dates';
 import { accuracyRows, accuracySummary } from '../engine/accuracy';
 import { costPerExtraOrder, earnedPerExtraOrder, RETURN_LABEL } from '../engine/net';
-import { SNAP_DAYS, type SnapKey } from '../state/derived';
+import { SNAP_DAYS, planDiff, settingsDiff, type SnapKey } from '../state/derived';
+import { engineSnapshot } from './snapshot';
 
 const rupees = (p: number) => roundHalfEven(p / 100);
 const dateOf = (t: number) => fmtDate(new Date((t + 19800) * 1000).toISOString().slice(0, 10));
@@ -29,6 +30,8 @@ const clampDays = (d: unknown) => (typeof d === 'number' && Number.isFinite(d) ?
 export type RayCtx = {
   /** settings = the edit buffer (draft); live numbers come from derived (approved settings). */
   model: Model; derived: Derived; settings: Settings; approved: boolean; killed: boolean;
+  /** v2: the day selected on Results (defaults to today) and decisions already taken on review items. */
+  day?: SnapKey; reviewDecisions?: Record<string, string>;
   ledger: LedgerView; settlementMode: 't1' | 'instant'; instant: InstantSettlement[];
 };
 
@@ -234,6 +237,21 @@ export const tools = {
     return { same_shoppers_monthly_profit: ctx.derived.strategies.map((x) => ({ option: x.label, profit: M(x.profit) })), similar_stores: ctx.model.pool.size,
       capabilities: ['Estimates each group\'s lift from similar stores before the store has data', 'Chooses per group for profit, not ratio', 'Learns from a 10% holdout and leans on measured results over time', 'Re-plans every week; the merchant approves changes'] };
   },
+  get_engine_snapshot(ctx: RayCtx) {
+    return engineSnapshot(ctx);
+  },
+  draft_settings_change(ctx: RayCtx, a: { budget?: number; keep_per_1000?: number; goal?: Goal }): { draft: Draft; requires_approval: true; diff: string[]; plan: ReturnType<typeof planSummary> } {
+    const patch: Partial<Settings> = {
+      ...(a.budget !== undefined ? { budget: Math.round(a.budget) } : {}),
+      ...(a.keep_per_1000 !== undefined ? { keepPer1000: Math.round(a.keep_per_1000) } : {}),
+      ...(a.goal ? { goal: a.goal } : {}),
+    };
+    const from = ctx.derived.liveSettings;
+    const to = { ...ctx.settings, ...patch };
+    const plan = simulate(ctx.model.groups, toPlanSettings(to), ctx.derived.live);
+    const diff = [...settingsDiff(from, to), ...planDiff(ctx.derived.live, plan)];
+    return { draft: { type: 'settings', patch, summary: diff.join('; ') || 'No change' }, requires_approval: true, diff, plan: planSummary(ctx, plan) };
+  },
   request_pause(_ctx: RayCtx, a: { scope: string }): { draft: Draft; requires_approval: true } {
     return { draft: { type: 'pause', scope: isGroupId(a.scope) ? a.scope : 'all' }, requires_approval: true };
   },
@@ -285,6 +303,14 @@ export function runTool(ctx: RayCtx, name: string, args: Record<string, unknown>
     case 'get_next_experiments': return tools.get_next_experiments(ctx);
     case 'get_why_ai': return tools.get_why_ai(ctx);
     case 'request_pause': return tools.request_pause(ctx, { scope: String(a.scope ?? 'all') });
+    case 'get_engine_snapshot': return tools.get_engine_snapshot(ctx);
+    case 'draft_settings_change': {
+      const n = (k: string) => (typeof a[k] === 'number' && Number.isFinite(a[k]) ? (a[k] as number) : undefined);
+      const budget = n('budget'), keep = n('keep_per_1000');
+      if (budget !== undefined && (budget < 5000 || budget > 1000000)) return { error: 'Budget guardrail: a monthly budget must be between ₹5,000 and ₹10,00,000 (no uncapped budgets).' };
+      if (keep !== undefined && (keep < 50 || keep > 950)) return { error: 'Margin must be what you keep from a ₹1,000 sale, between ₹50 and ₹950.' };
+      return tools.draft_settings_change(ctx, { budget, keep_per_1000: keep, goal: ['most_profit', 'new_customers', 'orders_steady'].includes(a.goal as string) ? (a.goal as Goal) : undefined });
+    }
     default: return { error: `Unknown tool ${name}.` };
   }
 }
