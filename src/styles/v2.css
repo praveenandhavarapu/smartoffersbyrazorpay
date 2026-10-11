@@ -47,3 +47,32 @@
 .studio .ai-grid .fcard p { color: var(--st-ink2); font-size: 13px; }
 .studio .ai-how .ai-line { color: var(--st-ink2); }
 .studio .ai-how .ai-line b { color: #fff; }
+/* Phase 3: learning loop */
+.now-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0 0 14px; }
+.now-strip > div { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 10px 12px; display: grid; gap: 4px; min-width: 0; }
+.now-strip > div.wait { border-color: var(--amber-line); background: var(--amber-soft); }
+.now-strip .ns-k { font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink3); }
+.now-strip .ns-v { font-size: 13px; color: var(--ink); display: grid; gap: 2px; }
+.now-strip .ns-item { text-align: left; font-size: 13px; }
+.studio .now-strip { margin: 12px 24px 0; }
+.studio .now-strip > div { background: var(--st-card); border-color: var(--st-line); }
+.studio .now-strip > div.wait { border-color: #6b4a14; background: #1d160b; }
+.studio .now-strip .ns-v { color: var(--st-ink); }
+.studio .now-strip .ns-k { color: var(--st-ink2); }
+@media (max-width: 760px) { .now-strip { grid-template-columns: 1fr; } .studio .now-strip { margin: 12px 16px 0; } }
+.exp-lead { margin: 0; }
+.rcard.space { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.rcard.space.on { border-color: var(--green); }
+.exp-table td { vertical-align: top; }
+.status.info { background: var(--blue-soft); color: var(--blue); }
+.triggers { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.triggers li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 2px 8px; align-items: baseline; }
+.triggers li .small { grid-column: 2; color: var(--ink2); }
+.triggers li.fired .tr-ic { color: var(--amber); }
+.triggers li .tr-ic { color: var(--ink3); }
+.chip-run { display: inline-block; margin-left: 6px; font-size: 10.5px; font-weight: 600; color: var(--blue); background: var(--blue-soft); border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
+.space-row { display: flex; gap: 8px; align-items: flex-start; margin: 10px 0 0; font-size: 13px; }
+.space-row input { margin-top: 3px; }
+.act-undo { white-space: nowrap; }
+.dtable td.act { white-space: normal; min-width: 280px; max-width: 520px; line-height: 1.4; }
+.exp-table td .sub, .dtable td .sub { white-space: normal; }

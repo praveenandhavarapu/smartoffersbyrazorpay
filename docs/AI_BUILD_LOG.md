@@ -52,3 +52,38 @@ How the v2 build was made: what the AI (Claude Code) did, which decisions came f
 - **From the spec (Praveen):** hero metric choice (cost per extra order vs earned, not leakage %), exact AI wording, the four named components, placement.
 - **Assumed:** leaked rupees for ALPHA10 come from the same formula applied to last month's code usage. Phase 2 values are engine output, so they show ₹730 / ₹614 rather than §3.2's ₹746 / ₹617 (see Phase 1).
 - **Time:** ~45 min.
+
+## Phase 3 — Learning loop: Suggest → Test → Prove → Promote (11 Oct 2026)
+
+- **AI did:**
+  - `src/engine/learning.ts`:
+    - A deterministic synthetic timeline: the ₹150 vs ₹200 challenger from day 8, the playbook suggestion on day 15, the promotion proposal on day 22, the festive drift pause on day 26, the organic early read on day 29, the projected organic promotion on day 43, and the lapsed lift-decay check on day 60.
+    - Per-group "segments" of what treated shoppers saw, which drive the formula counts for days 21+ (mixed offers use an average cost per order).
+    - A champion-vs-challenger read with 90% ranges and a stated decision rule.
+    - Proof mode vs Playbook mode from holdout volume.
+    - Re-test triggers.
+    - Plan-v2 priors for promoted variants.
+  - Offer variants (₹150 off, Free shipping on ₹999+, Free shipping prepaid only) were added in code with a per-group `costShare`; fixtures untouched.
+  - `src/data/network/playbook.ts` holds the synthetic benchmark table. Pool medians are used wherever the pool has the combination.
+  - UI:
+    - New Experiments tab (between Weekly reviews and Impact).
+    - "Now · Next · Waiting on you" strip on every Agent Studio tab and in compact form on Results.
+    - Runs whose action reflects that day's event.
+    - Activity log merging merchant and agent rows with before → after, ₹ impact and Undo while a test is running.
+    - Weekly reviews with Approve / Keep as is for learning proposals.
+    - "Challenger running" and mode chips in Results "By group".
+    - The WhatsApp line mentions the week's experiment.
+    - An experiment-space approval row on the plan, also listed in Guardrails and logged.
+  - 11 new tests, 142 total.
+- **From the spec (Praveen):** the loop and its names, 15% traffic, holdout never used for challengers, the event table, autonomy policy (space approved once; promotions and new offer types need approval; undo for automatic steps), proof vs playbook mode, the strip and tab contents.
+- **Assumed / decided:**
+  - ₹150 off counts as "an offer from your menu" (a cheaper amount of the ₹ off offer already on it), so the agent may test it inside the space. "Free shipping on ₹999+" is not on the menu, so it needs approval.
+  - Promotion rule: the challenger must cost less per shopper, make at least as much profit per shopper once this store's result is blended with the playbook (trust = shoppers ÷ (shoppers + 300)), and show a lift gap within noise. A pure lower-bound rule could never promote with 38 shoppers in two weeks; the blend is what lets a small store learn.
+  - Days 7–20 still come from the generated sessions (every treated shopper saw the champion), so the 15% challenger slice before day 21 is reported in Experiments, not in group totals. From day 21 the totals include it. This keeps the §3.2 day-20 numbers exact.
+  - Day 60 assumes the organic promotion that the test is on course for is approved at the week-6 review. It is labelled as a projection.
+  - Lapsed decay (keeps 59% of lift from day 33) is part of the synthetic truth, so Day 60 numbers fall a little versus Phase 1.
+- **Differs from §3.2:**
+  - Promoting ₹150 off adds about +₹8,050 a month to the plan (spec ≈ +₹4,900). The cost per extra order falls to ₹450 (spec ≈ ₹442).
+  - Measured +8.8 vs +8.3 pp at the week-3 review (spec +9.6 vs +9.2). The store's true lift for big carts is 9.5 pp in `pilot_truth.json`, and small-sample rounding takes it lower.
+  - "Day 13 of ~14" in the strip (spec "of ~21"), because the decision is due at the week-3 review.
+- **Time:** ~2.5 h.

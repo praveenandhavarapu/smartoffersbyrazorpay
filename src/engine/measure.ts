@@ -40,7 +40,7 @@ const Z90 = 1.645;
 export const TRUST_K = 300;
 
 /** kept: v2 share of extra sales kept after returns and failed COD (1 = v1). Returns and profit are net of it. */
-export function measure(groups: GroupStats[], offerOf: Record<GroupId, OfferId>, counts: Record<GroupId, ArmCounts>, days: number, margin = PROFILE.marginPct / 100, kept = 1): Snapshot {
+export function measure(groups: GroupStats[], offerOf: Record<GroupId, OfferId>, counts: Record<GroupId, ArmCounts>, days: number, margin = PROFILE.marginPct / 100, kept = 1, costOverride?: Partial<Record<GroupId, number>>): Snapshot {
   let S = 0, X = 0, O = 0, VAR = 0;
   const rows: MeasuredRow[] = groups.map((g) => {
     const c = counts[g.id];
@@ -50,7 +50,8 @@ export function measure(groups: GroupStats[], offerOf: Record<GroupId, OfferId>,
     const lift = pt - ph;
     const se = Math.sqrt((pt * (1 - pt)) / c.treatedCheckouts + (ph * (1 - ph)) / c.holdoutCheckouts);
     const extra = c.treatedCheckouts * lift;
-    const spend = c.treatedOrders * OFFER_BY_ID[o].costPerOrderInr;
+    // v2: costOverride = average cost per treated order when a group mixes offers (champion + challenger).
+    const spend = c.treatedOrders * (costOverride?.[g.id] ?? OFFER_BY_ID[o].costPerOrderInr * (g.costShare?.[o] ?? 1));
     const sales = extra * g.aovInr;
     if (o !== 'none') {
       S += spend; X += sales; O += extra;

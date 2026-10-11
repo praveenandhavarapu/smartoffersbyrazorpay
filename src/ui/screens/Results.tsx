@@ -16,6 +16,9 @@ import { Banner, Kpi, OfferChip, shortGroup } from '../components/bits';
 import { OverrideDrawer } from '../components/OverrideDrawer';
 import { FEATURES } from '../../config/features';
 import { RETURN_LABEL } from '../../engine/net';
+import { NowStrip } from '../components/NowStrip';
+import { ModeChip } from '../components/Experiments';
+import { dayOf } from '../../engine/learning';
 import { HeroMetric } from '../components/HeroMetric';
 
 export function Results() {
@@ -59,6 +62,13 @@ export function Results() {
   const meera = derived.creators.rows.find((r) => r.flag);
   const maxRate = Math.max(...s.rows.map((r) => r.treatedRate));
   const offerRows = s.rows.filter((r) => r.offer !== 'none');
+  // WhatsApp summary: the week's experiment outcome (latest agent event up to the viewed day).
+  const weekEvent = (() => {
+    const e = [...(derived.learning?.events ?? [])].reverse().find((x) => x.day <= s.days && x.day > s.days - 7 && x.type !== 'lift_decay');
+    if (!e) return null;
+    const short = e.summary.replace(/^Week \d+ review: /, '').split('. ')[0];
+    return `${short}${e.needsApproval ? (e.decision ? ` (${e.decision === 'approved' ? 'approved' : 'kept as is'}).` : ' (waiting on you).') : '.'}`;
+  })();
 
   return (
     <div className="res">
@@ -83,6 +93,7 @@ export function Results() {
         {approved && derived.approvedDiffersFromPilot && <Banner>Your approved plan differs from the default; the synthetic pilot data was generated for the default plan, so results below measure that plan.</Banner>}
         {killed && <Banner tone="warn">{alpha10Restored ? 'Smart Offers stopped and ALPHA10 restored for everyone.' : 'Kill switch on: every group sees no offer. Shoppers get the store\'s default checkout.'} Logged in the audit log.</Banner>}
         {SNAP_DAYS[snapshot] > nowDay && <Banner>Day {s.days} is a projection from today's measured rates, not measured data.</Banner>}
+        {FEATURES.experiments && <NowStrip compact />}
         {FEATURES.heroMetric && <HeroMetric day={snapshot} />}
         {approved && <PilotDecisionCard />}
 
@@ -128,12 +139,15 @@ export function Results() {
               <tbody>
                 {s.rows.map((r) => {
                   const live = derived.liveOffers[r.group];
+                  const shown = FEATURES.experiments ? (killed ? 'none' : r.offer) : live;
+                  const xrow = derived.learning?.rows.find((x) => x.group === r.group);
+                  const running = Boolean(xrow?.challenger && xrow.status === 'running' && SNAP_DAYS[snapshot] >= (xrow.startedOn ? dayOf(xrow.startedOn) : 999));
                   const planRow = derived.live.rows.find((x) => x.group === r.group)!;
                   const g = model.groups.find((x) => x.id === r.group)!;
                   return [
                     <tr key={r.group}>
                       <td>{shortGroup(g.label)}</td>
-                      <td><OfferChip offer={live} />{overrides[r.group] && <span className="sub">override</span>}</td>
+                      <td><OfferChip offer={shown} />{running && xrow?.challenger && <span className="chip-run" title={`${OFFER_BY_ID[xrow.challenger].label} on ${Math.round(xrow.trafficShare * 100)}% of treated shoppers`}>challenger running</span>}{overrides[r.group] && <span className="sub">override</span>}{FEATURES.experiments && shown !== live && <span className="sub">today: {OFFER_BY_ID[live].label}</span>}{FEATURES.experiments && xrow && xrow.mode.mode !== 'none' && <span className="sub"><ModeChip mode={xrow.mode.mode} days={xrow.mode.days} /></span>}</td>
                       <td>{r.offer === 'none' ? '—' : inr(r.spend)}</td>
                       <td>{r.offer === 'none' ? '—' : inr(r.extraSales)}</td>
                       <td>{r.offer === 'none' ? '—' : xr(r.ret)}</td>
@@ -194,7 +208,7 @@ export function Results() {
         </div>
         <div className="card">
           <span className="mono-tag green">Weekly summary · WhatsApp</span>
-          <div className="wa"><div className="wa-b">Smart Offers, last 7 days (approx.): {inr(s.weekly.spend)} spent, {num(s.weekly.extraOrders)} extra orders, {inr(s.weekly.extraSales)} extra sales, {inrSigned(s.weekly.profit)} profit{v2 ? ' after returns' : ''}. {v2 ? `${offerRows.filter((r) => r.stillLearning).length} of ${offerRows.length} offer groups still learning.` : 'Still learning on most groups.'}<small>Mon 9:00</small></div></div>
+          <div className="wa"><div className="wa-b">Smart Offers, last 7 days (approx.): {inr(s.weekly.spend)} spent, {num(s.weekly.extraOrders)} extra orders, {inr(s.weekly.extraSales)} extra sales, {inrSigned(s.weekly.profit)} profit{v2 ? ' after returns' : ''}. {v2 ? `${offerRows.filter((r) => r.stillLearning).length} of ${offerRows.length} offer groups still learning.` : 'Still learning on most groups.'}{FEATURES.experiments && weekEvent ? ` This week: ${weekEvent}` : ''}<small>Mon 9:00</small></div></div>
         </div>
         <div className="card">
           <span className="mono-tag">Billing</span>

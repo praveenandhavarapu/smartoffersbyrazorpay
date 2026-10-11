@@ -79,7 +79,10 @@ How AI tools were used, what they did, how they sped up the work, and where I ma
 
 - Phase 2 (flag `heroMetric`): cost per extra order hero card (Results, Impact, Home), named AI (uplift model, network playbook, experiment engine, Ray), "AI re-decides every night" replaces "No AI at checkout". Tests 131 passing; build passes.
 
+- Phase 3 (flag `experiments`): learning loop with experiment space, ₹150 vs ₹200 challenger, playbook suggestion, promotion proposal with Approve/Keep, drift and lift-decay triggers, Experiments tab, Now · Next · Waiting strip, runs/activity wiring with Undo, proof vs playbook mode. Tests 142 passing; build passes.
+
 <!-- Claude Code adds unclear spec points here with the option it chose. -->
+- v2 §7.2's decision rule ("challenger lower bound ≥ champion − tolerance") cannot promote with ~38 challenger shoppers. Chose: blend the store's result with the playbook (same trust weighting as the plan) and require cost lower, profit per shopper at least equal, and the store's lift gap within noise.
 - v2 §3.2 expects ALPHA10 ₹746 per extra order and ₹617 earned; the engine gives ₹730 (254.8 extra orders) and ₹614 (store AOV ₹1,516). Chose: keep the engine values and report them.
 - v2 Phase 3 needs "₹150 off", which is not in `fixtures/offers.json`. Chose: define it in code as a cheaper amount of the "₹ off" offer already on the menu (fixtures untouched).
 - SPEC 5.2 asks the aggregated baseline "conversions within 0.5%" of the fixture, but the baseline month includes code lifts, so it can't match `base_conversion`. Chose: compare with the fixture-implied rate (base + share × code lift); checkouts exact, AOV exact to the rupee.

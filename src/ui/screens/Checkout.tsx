@@ -56,8 +56,8 @@ export function Checkout() {
   const g = model.groups.find((x) => x.id === d.group)!;
   const planOffer = derived.liveOffers[d.group];
   const why = whyNumbers(g, planOffer, derived.margin, derived.kept);
-  const shipping = d.offer === 'free_shipping' ? 0 : d.shippingInr;
-  const discount = d.offer === 'flat_100' || d.offer === 'flat_200' ? d.savingInr : 0;
+  const shipping = d.offer.startsWith('free_shipping') ? 0 : d.shippingInr;
+  const discount = d.offer.startsWith('flat_') ? d.savingInr : 0;
   const total = d.cartInr - discount + shipping;
 
   return (

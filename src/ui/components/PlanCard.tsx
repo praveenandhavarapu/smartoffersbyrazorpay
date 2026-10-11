@@ -36,6 +36,8 @@ export function PlanCard({ onAsk }: { onAsk?: (q: string) => void }) {
   const approved = useStore((s) => s.approved);
   const approve = useStore((s) => s.approve);
   const approvedOn = useStore((s) => s.approvedOn);
+  const space = useStore((s) => s.experimentSpace);
+  const setSpace = useStore((s) => s.setExperimentSpace);
   const draftSettings = useStore((s) => s.settings);
   const [compare, setCompare] = useState(false);
   const [why, setWhy] = useState<string | null>(null);
@@ -118,6 +120,12 @@ export function PlanCard({ onAsk }: { onAsk?: (q: string) => void }) {
           </div>
         )}
       </div>
+      {FEATURES.experiments && (
+        <label className="space-row">
+          <input type="checkbox" checked={space} onChange={(e) => setSpace(e.target.checked)} />
+          <span><b>Let the agent test challengers</b>: up to 15% of a group's shoppers, only offers from your menu, within your budget and max discount.{approved ? ` ${space ? 'On' : 'Off'} since your approval.` : ' Approved together with the plan.'}</span>
+        </label>
+      )}
       <div className="plan-actions">
         {approved ? (
           derived.hasDraft ? <span className="pill draft">Approve or discard the draft above</span> : <span className="pill live"><Check width={14} /> Live since approval</span>

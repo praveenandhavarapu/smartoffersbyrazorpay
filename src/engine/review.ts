@@ -12,7 +12,7 @@ import { buildPlan, offerMap, type PlanSettings } from './plan';
 import { inr } from '../lib/format';
 import { RETURN_LABEL } from './net';
 
-export type ReviewAction = { type: 'override'; group: GroupId; offer: OfferId; from: OfferId } | { type: 'creator' };
+export type ReviewAction = { type: 'override'; group: GroupId; offer: OfferId; from: OfferId } | { type: 'creator' } | { type: 'learning'; key: string };
 /** No verdicts before this many days: avoids reacting to early noise. */
 export const MIN_DAYS_TO_DECIDE = 14;
 /** Beyond this, "days to prove" is not a useful number. */
@@ -20,7 +20,7 @@ const MAX_ETA_DAYS = 45;
 
 export type ReviewItem = {
   id: string;
-  kind: 'proven' | 'learning' | 'early' | 'watch' | 'switch' | 'no_lift' | 'creator' | 'festive' | 'budget' | 'control';
+  kind: 'proven' | 'learning' | 'early' | 'watch' | 'switch' | 'no_lift' | 'creator' | 'festive' | 'budget' | 'control' | 'experiment';
   group?: GroupId;
   title: string;
   detail: string;

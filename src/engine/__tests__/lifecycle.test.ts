@@ -24,13 +24,13 @@ describe('lifecycle: weekly reviews, alerts, pilot decision', () => {
     expect(w2.dataDays).toBe(14);
     expect(w2.items.some((i) => i.kind === 'creator' && i.action?.type === 'creator')).toBe(true);
     expect(w2.items.some((i) => i.kind === 'budget')).toBe(true);
-    expect(w2.items.filter((i) => i.group).length).toBe(6);
+    expect(w2.items.filter((i) => i.group && i.kind !== 'experiment').length).toBe(6); // one verdict per group; learning-loop items are extra
     const fixed = live('day20', { creatorFix: 'limited' }).reviews[0];
     expect(fixed.items.some((i) => i.kind === 'creator')).toBe(false);
   });
   it('no verdicts before day 14 (week 1 is an early read)', () => {
     const w1 = live('day20').reviews.find((r) => r.week === 1)!;
-    expect(w1.items.filter((i) => i.group && i.kind !== 'control').every((i) => i.kind === 'early')).toBe(true);
+    expect(w1.items.filter((i) => i.group && i.kind !== 'control' && i.kind !== 'experiment').every((i) => i.kind === 'early')).toBe(true);
     expect(w1.items.every((i) => !/\d{3,} more days/.test(i.detail))).toBe(true);
   });
   it('week 3 review (12 Oct) flags the festive drop starting 16 Oct', () => {

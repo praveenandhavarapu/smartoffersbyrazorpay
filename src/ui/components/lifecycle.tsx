@@ -144,7 +144,7 @@ function WhyAIv1() {
 }
 
 function ItemIcon({ kind }: { kind: ReviewItem['kind'] }) {
-  const map: Record<ReviewItem['kind'], string> = { proven: '✓', learning: '…', early: '◷', watch: '!', switch: '⇄', no_lift: '∅', creator: '%', festive: '★', budget: '₹', control: '=' };
+  const map: Record<ReviewItem['kind'], string> = { proven: '✓', learning: '…', early: '◷', watch: '!', switch: '⇄', no_lift: '∅', creator: '%', festive: '★', budget: '₹', control: '=', experiment: '⟳' };
   return <span className={`ri-ic ${kind}`} aria-hidden="true">{map[kind]}</span>;
 }
 
@@ -154,13 +154,15 @@ export function ReviewCard({ review, open: startOpen = true }: { review: WeeklyR
   const decide = useStore((s) => s.decideReview);
   const applyOverride = useStore((s) => s.applyOverride);
   const setCreatorFix = useStore((s) => s.setCreatorFix);
+  const decideLearning = useStore((s) => s.decideLearning);
   const openReview = useStore((s) => s.openReview);
   const [open, setOpen] = useState(startOpen);
   const pending = review.items.filter((i) => i.action && !decisions[i.id]);
   const approve = (i: ReviewItem) => {
     if (i.action?.type === 'override') applyOverride(i.action.group, i.action.offer, i.action.from, `Week ${review.week} review: ${OFFER_BY_ID[i.action.offer].label}`);
     if (i.action?.type === 'creator') setCreatorFix('limited');
-    decide(i.id, 'approved', i.title);
+    if (i.action?.type === 'learning') decideLearning(i.action.key, 'approved', i.title);
+    decide(i.id, 'approved', i.title, i.action?.type === 'learning');
   };
   return (
     <div className="rcard review" onMouseEnter={() => openReview(review.id)} onFocus={() => openReview(review.id)}>
@@ -178,7 +180,7 @@ export function ReviewCard({ review, open: startOpen = true }: { review: WeeklyR
               <ItemIcon kind={i.kind} />
               <div><b>{i.title}</b><p>{i.detail}</p></div>
               {i.action && (decisions[i.id] ? <span className={`status ${decisions[i.id] === 'approved' ? 'ok' : ''}`}>{decisions[i.id]}</span> : (
-                <div className="btns"><button className="btn primary sm" onClick={() => approve(i)}>Approve</button><button className="btn secondary sm" onClick={() => { if (i.action?.type === 'creator') setCreatorFix('kept'); decide(i.id, 'dismissed', i.title); }}>Keep as is</button></div>
+                <div className="btns"><button className="btn primary sm" onClick={() => approve(i)}>Approve</button><button className="btn secondary sm" onClick={() => { if (i.action?.type === 'creator') setCreatorFix('kept'); if (i.action?.type === 'learning') decideLearning(i.action.key, 'declined', i.title); decide(i.id, 'dismissed', i.title, i.action?.type === 'learning'); }}>Keep as is</button></div>
               ))}
             </div>
           ))}

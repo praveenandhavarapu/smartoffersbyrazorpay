@@ -5,7 +5,12 @@
  */
 
 export type GroupId = 'new_ads_small' | 'new_ads_big' | 'new_creator' | 'new_organic' | 'returning' | 'lapsed';
-export type OfferId = 'none' | 'free_shipping' | 'flat_100' | 'flat_200';
+export type OfferId = 'none' | 'free_shipping' | 'flat_100' | 'flat_200' | VariantId;
+/**
+ * v2 experiment variants (spec §7, §10). Not in fixtures/offers.json: defined in src/data/fixtures.ts as code.
+ * They only enter a plan through the learning loop (a challenger or an approved promotion).
+ */
+export type VariantId = 'flat_150' | 'free_shipping_999' | 'free_shipping_prepaid';
 export type Arm = 'pre_pilot' | 'treated' | 'holdout';
 export type Goal = 'most_profit' | 'new_customers' | 'orders_steady';
 
@@ -103,6 +108,8 @@ export type GroupStats = {
   aovInr: number;
   baseConversion: number;
   priorLiftsPp: Partial<Record<OfferId, number>>;
+  /** v2: share of an offer's nominal cost actually paid per buyer (e.g. free shipping only on ₹999+ carts). Default 1. */
+  costShare?: Partial<Record<OfferId, number>>;
   today: TodayCode[];
 };
 

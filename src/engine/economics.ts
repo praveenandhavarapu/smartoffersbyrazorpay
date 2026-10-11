@@ -13,7 +13,7 @@ export const NONE_ECON: Econ = { offer: 'none', lift: 0, p: 0, spend: 0, extraSa
 export function perCheckout(g: GroupStats, offer: OfferId, margin: number, liftPp?: number, kept = 1): Econ {
   if (offer === 'none') return { ...NONE_ECON, p: g.baseConversion };
   const lift = (liftPp ?? g.priorLiftsPp[offer] ?? 0) / 100;
-  const cost = OFFER_BY_ID[offer].costPerOrderInr;
+  const cost = OFFER_BY_ID[offer].costPerOrderInr * (g.costShare?.[offer] ?? 1);
   const p = g.baseConversion + lift; // buy rate with the offer
   const spend = p * cost; // the discount is paid to EVERY buyer
   const extraSales = lift * g.aovInr; // only extra buyers create value

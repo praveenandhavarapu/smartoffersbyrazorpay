@@ -52,6 +52,12 @@ type Persisted = {
   pilotDecision: 'keep' | 'extend' | 'stop' | null;
   alpha10Restored: boolean;
   experiments: Record<string, 'approved' | 'declined'>;
+  /** v2 §7.1: agent may test challengers (≤15% of a group's shoppers, menu offers, within budget/max discount). */
+  experimentSpace: boolean;
+  /** v2 §7: merchant decisions on the learning loop (playbook suggestions, promotions). */
+  learningDecisions: Record<string, 'approved' | 'declined'>;
+  /** v2 §7.6: automatic agent steps the merchant undid (event ids). */
+  undone: string[];
   outageEvents: number;
   audit: AuditEntry[];
 };
@@ -69,12 +75,15 @@ type Actions = {
   jump20: () => void;
   setSnapshot: (s: Snap) => void;
   jump30: () => void;
-  decideReview: (id: string, d: 'approved' | 'dismissed', summary: string) => void;
+  decideReview: (id: string, d: 'approved' | 'dismissed', summary: string, silent?: boolean) => void;
   openReview: (id: string) => void;
   markRead: (ids: string[]) => void;
   decidePilot: (d: 'keep' | 'extend' | 'stop', summary: string) => void;
   stopSmartOffers: (restoreAlpha10: boolean, summary: string) => void;
   decideExperiment: (id: string, d: 'approved' | 'declined', summary: string) => void;
+  setExperimentSpace: (on: boolean) => void;
+  decideLearning: (key: string, d: 'approved' | 'declined', summary: string, impact?: string) => void;
+  undoEvent: (id: string, summary: string) => void;
   applyOverride: (g: GroupId, o: OfferId, from: OfferId, costNote: string, actor?: Actor) => void;
   clearOverride: (g: GroupId) => void;
   kill: () => void;
@@ -93,7 +102,7 @@ export type AppState = Persisted & Ephemeral & Actions;
 const initial: Persisted = {
   settings: DEFAULT_USER_SETTINGS, approved: false, approvedSettings: null, approvedOn: null, overrides: {}, killed: false,
   moment: 'before', creatorFix: 'pending', creatorFixedOn: null, rayMode: 'live', settlementMode: 't1', instantSettlements: [],
-  reviewDecisions: {}, reviewsOpened: [], notificationsRead: [], pilotDecision: null, alpha10Restored: false, experiments: {}, outageEvents: 0,
+  reviewDecisions: {}, reviewsOpened: [], notificationsRead: [], pilotDecision: null, alpha10Restored: false, experiments: {}, experimentSpace: true, learningDecisions: {}, undone: [], outageEvents: 0,
   audit: [],
 };
 
@@ -124,7 +133,7 @@ const pick = (s: AppState): Persisted => ({
   killed: s.killed, moment: s.moment, creatorFix: s.creatorFix, creatorFixedOn: s.creatorFixedOn, rayMode: s.rayMode, settlementMode: s.settlementMode,
   instantSettlements: s.instantSettlements, reviewDecisions: s.reviewDecisions, reviewsOpened: s.reviewsOpened,
   notificationsRead: s.notificationsRead, pilotDecision: s.pilotDecision, alpha10Restored: s.alpha10Restored,
-  experiments: s.experiments, outageEvents: s.outageEvents, audit: s.audit,
+  experiments: s.experiments, experimentSpace: s.experimentSpace, learningDecisions: s.learningDecisions, undone: s.undone, outageEvents: s.outageEvents, audit: s.audit,
 });
 
 export const describeSettings = (s: Settings) =>
@@ -155,6 +164,7 @@ export const useStore = create<AppState>((set, get) => {
       const s = get().settings;
       set({ approved: true, approvedSettings: s, approvedOn: DEMO_DATES[get().moment], killed: false });
       log('Merchant (Praveen)', 'approve', 'Approved Smart Offers plan and went live (ALPHA10 retired, 10% holdout)', 'ALPHA10 for everyone', describe(s));
+      if (FEATURES.experiments && get().experimentSpace) log('Merchant (Praveen)', 'experiment', `Approved the experiment space: ${EXPERIMENT_SPACE_TEXT}`);
     },
     approveChanges: (diff) => {
       const st = get();
@@ -170,9 +180,9 @@ export const useStore = create<AppState>((set, get) => {
     jump20: () => set({ moment: 'day20', snapshot: 'day20' }),
     setSnapshot: (snapshot) => set({ snapshot }),
     jump30: () => set({ moment: 'day30', snapshot: 'day30' }),
-    decideReview: (id, d, summary) => {
+    decideReview: (id, d, summary, silent) => {
       set((st) => ({ reviewDecisions: { ...st.reviewDecisions, [id]: d } }));
-      log('Merchant (Praveen)', 'review', `${d === 'approved' ? 'Approved' : 'Dismissed'} review item: ${summary}`);
+      if (!silent) log('Merchant (Praveen)', 'review', `${d === 'approved' ? 'Approved' : 'Dismissed'} review item: ${summary}`);
     },
     openReview: (id) => set((st) => (st.reviewsOpened.includes(id) ? st : { reviewsOpened: [...st.reviewsOpened, id] })),
     markRead: (ids) => set((st) => ({ notificationsRead: [...new Set([...st.notificationsRead, ...ids])] })),
@@ -183,6 +193,18 @@ export const useStore = create<AppState>((set, get) => {
     stopSmartOffers: (restoreAlpha10, summary) => {
       set({ killed: true, alpha10Restored: restoreAlpha10 });
       log('Merchant (Praveen)', 'kill_switch', summary, 'plan live', restoreAlpha10 ? 'stopped; ALPHA10 restored' : 'stopped; no offers');
+    },
+    setExperimentSpace: (on) => {
+      set({ experimentSpace: on });
+      if (get().approved) log('Merchant (Praveen)', 'experiment', on ? 'Turned the experiment space on' : 'Turned the experiment space off: no new challengers', on ? 'off' : 'on', on ? 'on' : 'off');
+    },
+    decideLearning: (key, d, summary, impact) => {
+      set((st) => ({ learningDecisions: { ...st.learningDecisions, [key]: d } }));
+      log('Merchant (Praveen)', 'experiment', `${d === 'approved' ? 'Approved' : 'Kept as is'}: ${summary}`, undefined, impact);
+    },
+    undoEvent: (id, summary) => {
+      set((st) => ({ undone: st.undone.includes(id) ? st.undone : [...st.undone, id] }));
+      log('Merchant (Praveen)', 'experiment', `Undid an automatic step: ${summary}`);
     },
     decideExperiment: (id, d, summary) => {
       set((st) => ({ experiments: { ...st.experiments, [id]: d } }));
@@ -235,3 +257,6 @@ export const useStore = create<AppState>((set, get) => {
 useStore.subscribe((s) => save(pick(s)));
 
 export const marginOf = (s: Settings): number => s.keepPer1000 / 1000;
+
+/** v2 §7.1 wording of what the merchant approves once. */
+export const EXPERIMENT_SPACE_TEXT = 'let the agent test challengers: up to 15% of a group\'s shoppers, only offers from your menu, within your budget and max discount.';

@@ -19,20 +19,35 @@ import { compareStrategies, profitOverRatio } from '../engine/compare';
 import { costPerExtraOrder, dayMetrics, earnedPerExtraOrder, keptRate, leakedRupees } from '../engine/net';
 import { FEATURES } from '../config/features';
 import { GOAL_LABEL, groupLabel, offerLabel } from '../lib/labels';
+import { buildLearning, type LearningModel } from '../engine/learning';
+import type { ReviewItem } from '../engine/review';
 import type { Model } from './model';
 import { DEFAULT_USER_SETTINGS, draftSettingsOf, marginOf, type Settings } from './store';
 
-export function toPlanSettings(s: Settings, overrides?: Partial<Record<GroupId, OfferId>>): Partial<PlanSettings> {
+/** extraAllowed = offer variants promoted by the learning loop (approved by the merchant). */
+export function toPlanSettings(s: Settings, overrides?: Partial<Record<GroupId, OfferId>>, extraAllowed: OfferId[] = []): Partial<PlanSettings> {
   return {
     budget: s.budget, margin: marginOf(s), keptRate: keptRate(), goal: s.goal, ordersFloorPct: s.ordersFloorPct,
-    allowedOffers: s.allowedOffers, maxDiscountInr: s.maxDiscountInr, overrides,
+    allowedOffers: [...s.allowedOffers, ...extraAllowed.filter((o) => !s.allowedOffers.includes(o))], maxDiscountInr: s.maxDiscountInr, overrides,
   };
 }
 
 export type DerivedInput = {
   settings: Settings; approved: boolean; approvedSettings: Settings | null; overrides: Partial<Record<GroupId, OfferId>>; killed: boolean;
   moment?: Moment; creatorFix?: 'pending' | 'limited' | 'kept'; creatorFixDate?: string | null;
+  experimentSpace?: boolean; learningDecisions?: Record<string, 'approved' | 'declined'>; undone?: string[];
 };
+
+/** Learning-loop items for a weekly review (the events that happen on that Monday). */
+function learningItems(L: LearningModel, reviewDay: number, week: number): ReviewItem[] {
+  return L.events.filter((e) => e.day === reviewDay).flatMap((e): ReviewItem[] => {
+    const id = `w${week}-${e.id}`;
+    if (e.type === 'challenger_started') return [{ id, kind: 'experiment', group: e.group, title: 'Started a challenger test (no approval needed)', detail: `${e.summary.replace(/^Week \d+ review: /, '')}. Undo any time in the Activity log.` }];
+    if (e.type === 'playbook_suggestion' || e.type === 'promotion_proposed') return [{ id, kind: 'experiment', group: e.group, title: e.type === 'promotion_proposed' ? `Promote ₹150 off for ${e.group ? groupLabel(e.group) : 'this group'}` : `Playbook suggestion: Free shipping on ₹999+ for ${e.group ? groupLabel(e.group) : 'this group'}`, detail: `${e.detail ?? e.summary.replace(/^Week \d+ review: /, '')}${e.impactInr !== undefined ? ` About ${e.impactInr >= 0 ? '+' : '−'}${inr(Math.abs(e.impactInr))} a month after returns.` : ''}`, action: { type: 'learning', key: e.key! } }];
+    if (e.type === 'early_read') return [{ id, kind: 'experiment', group: e.group, title: 'Early read on the organic challenger', detail: e.summary.replace(/^Week \d+ review: /, '') }];
+    return [];
+  });
+}
 
 export const SNAP_DAYS = { day7: 7, day14: 14, day20: 20, day30: 30, day60: 60 } as const;
 export type SnapKey = keyof typeof SNAP_DAYS;
@@ -87,7 +102,14 @@ export function derive(m: Model, st: DerivedInput) {
   const margin = v2 ? marginOf(liveSettings) : marginOf(st.settings);
   const draftMargin = marginOf(draftSettings);
   const v1Margin = PROFILE.marginPct / 100; // v1 measured ALPHA10 and the pilot at the profile margin
-  const draft = buildPlan(g, toPlanSettings(draftSettings));
+  const moment0 = st.moment ?? 'before';
+  const learning = FEATURES.experiments ? buildLearning(g, {
+    approved: st.approved, experimentSpace: st.experimentSpace ?? true, festiveWindow: liveSettings.festiveWindow,
+    decisions: st.learningDecisions ?? {}, undone: st.undone ?? [], nowDay: NOW_DAY[moment0],
+  }, marginOf(liveSettings), kept, groupLabel) : null;
+  const promoted = learning?.promotedOffers ?? [];
+  const planGroups = learning?.groupsV2 ?? g;
+  const draft = buildPlan(planGroups, toPlanSettings(draftSettings, undefined, promoted));
   const range = planRange(g, draft, m.pool.p25, m.pool.p75);
   const a10 = alpha10(g, v2 ? margin : v1Margin, kept);
   const a10AtMargin = alpha10(g, draftMargin, kept);
@@ -105,7 +127,7 @@ export function derive(m: Model, st: DerivedInput) {
     return t + leakedRupees(n * withCode * u.discountInr, x.baseConversion, withCode);
   }, 0), 0);
 
-  const live: PlanResult = buildPlan(g, toPlanSettings(liveSettings, st.overrides));
+  const live: PlanResult = buildPlan(planGroups, toPlanSettings(liveSettings, st.overrides, promoted));
   const liveRange = planRange(g, live, m.pool.p25, m.pool.p75);
   const liveOffers: Record<GroupId, OfferId> = st.killed
     ? (Object.fromEntries(GROUP_IDS.map((x) => [x, 'none'])) as Record<GroupId, OfferId>)
@@ -128,6 +150,7 @@ export function derive(m: Model, st: DerivedInput) {
   };
   const snapAt = (d: number): Snapshot => (d === 20 ? measure(g, pilotOffers, controlFix(m.pilot20Counts, 20), 20, measureMargin, kept)
     : d < 20 ? measure(g, pilotOffers, controlFix(pilotCountsFromSessions(m.pilotSessions.filter((x) => x.created_at < start + d * 86400)), d), d, measureMargin, kept)
+    : learning ? (() => { const c = learning.countsAt(d); return measure(learning.withCost, learning.offersOn(d), c.counts, d, measureMargin, kept, c.cost); })()
     : measure(g, pilotOffers, countsFromFormula(g, pilotOffers, PILOT_TRUTH.actualLiftPp, d), d, measureMargin, kept));
   const day7 = snapAt(7), day14 = snapAt(14), day20 = snapAt(20), day30 = snapAt(30), day60 = snapAt(60);
   const defaultPlan = buildPlan(g, toPlanSettings(DEFAULT_USER_SETTINGS));
@@ -152,19 +175,23 @@ export function derive(m: Model, st: DerivedInput) {
 
   // Weekly reviews: every Monday 06:00 from week 1 (28 Sep) while the plan is live.
   const weeksDone = !st.approved || moment === 'before' ? 0 : moment === 'day20' ? 2 : 4;
-  const reviewSettings = toPlanSettings(liveSettings);
   const reviews: WeeklyReview[] = Array.from({ length: weeksDone }, (_, i) => {
     const week = i + 1;
-    const date = pilotDayDate(week * 7 + 1);
+    const reviewDay = week * 7 + 1;
+    const date = pilotDayDate(reviewDay);
     const launchGap = (toUnix(drop.launch) - toUnix(date)) / 86400;
-    return buildReview({
-      week, date, snap: snapAt(week * 7), groups: g, liveOffers: pilotOffers, settings: reviewSettings, margin: v2 ? margin : v1Margin,
+    const promotedThen = learning ? promoted.filter(() => reviewDay > 22) : [];
+    const r = buildReview({
+      week, date, snap: snapAt(week * 7), groups: planGroups, liveOffers: learning ? learning.offersOn(week * 7) : pilotOffers, settings: toPlanSettings(liveSettings, undefined, promotedThen), margin: v2 ? margin : v1Margin,
       budget: liveSettings.budget,
       creatorLeak: leak ? { code: leak.code, share: leak.returningSharePct / 100, monthly: leak.discountToReturning } : null,
       creatorFixed: (st.creatorFix ?? 'pending') !== 'pending',
       festive: launchGap >= 0 && launchGap <= 7 ? { name: drop.name, launch: fmtDate(drop.launch, false), styles: drop.styles, days: drop.fullPriceDays } : null,
       label,
     });
+    if (!learning) return r;
+    const items = [...r.items.slice(0, -1), ...learningItems(learning, reviewDay, week), ...r.items.slice(-1)];
+    return { ...r, items, changes: items.filter((x) => x.action).length };
   }).reverse();
   const nextReview = st.approved && moment !== 'before' ? pilotDayDate((weeksDone + 1) * 7 + 1) : null;
 
@@ -222,8 +249,23 @@ export function derive(m: Model, st: DerivedInput) {
     festive: { ...drop, end: dropEnd },
     creators,
     creatorFixDate: st.creatorFixDate ?? null,
-    approvedDiffersFromPilot: GROUP_IDS.some((x) => offerMap(live)[x] !== pilotOffers[x]),
+    approvedDiffersFromPilot: GROUP_IDS.some((x) => offerMap(live)[x] !== (learning ? learning.offersOn(Math.max(NOW_DAY[moment0], 1)) : pilotOffers)[x]),
+    learning,
   };
+}
+
+/** Decisions waiting on the merchant across all reviews, one per underlying action (the creator fix appears weekly). */
+export function pendingActions(reviews: WeeklyReview[], decisions: Record<string, string>): ReviewItem[] {
+  const seen = new Set<string>();
+  const out: ReviewItem[] = [];
+  for (const r of [...reviews].reverse()) for (const i of r.items) {
+    if (!i.action || decisions[i.id]) continue;
+    const key = i.action.type === 'creator' ? 'creator' : i.action.type === 'learning' ? `l:${i.action.key}` : `o:${i.action.group}:${i.action.offer}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(i);
+  }
+  return out;
 }
 
 /** Which plan "Why AI" describes: the live one once approved, else the draft. */
