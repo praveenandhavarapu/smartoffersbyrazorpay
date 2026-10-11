@@ -32,6 +32,7 @@ export function Studio() {
             <div key={a.name} className="fcard agent dim">
               <div className="t"><span>{a.name}</span><b>{a.tag}</b></div>
               <div className="m">{a.desc}</div>
+              {FEATURES.discountBrain && a.name === 'Cart Abandonment' && <span className="brain-badge">Asks Smart Offers before offering a discount (simulated)</span>}
               <div className="m small-m">Shown for context; not part of this concept.</div>
             </div>
           ))}

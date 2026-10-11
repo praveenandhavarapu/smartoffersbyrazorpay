@@ -17,6 +17,7 @@ import type { GroupId } from '../../data/types';
 import { FEATURES } from '../../config/features';
 import { humanise } from '../../lib/labels';
 import { NowStrip } from '../components/NowStrip';
+import { DiscountBrain } from '../components/DiscountBrain';
 import { ExperimentsTab } from '../components/Experiments';
 import { dayOf, KEYS } from '../../engine/learning';
 import { pendingActions } from '../../state/derived';
@@ -131,6 +132,13 @@ export function StudioAgent() {
             </div>
             {FEATURES.heroMetric && <><div className="st-label ai-sub">The AI behind it</div><HowAIWorks /></>}
           </section>
+          {FEATURES.discountBrain && (
+            <section className="st-sec">
+              <div className="st-label">Decisions served to other agents</div>
+              <h3>One discount brain for every agent</h3>
+              <DiscountBrain />
+            </section>
+          )}
           <section className="st-sec">
             <div className="st-label">Permissions</div>
             <h3>What the agent can and cannot do</h3>

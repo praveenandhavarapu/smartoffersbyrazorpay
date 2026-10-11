@@ -101,3 +101,17 @@ How the v2 build was made: what the AI (Claude Code) did, which decisions came f
   - "Offers you haven't tried" hides offers that beat no-offer in under half the tests (returning ₹100 off) so the list never suggests a loss-maker.
   - A decision on a review proposal takes effect from that review's date, because the demo clock jumps. Approving the organic test at day 20 shows it running since 16 Oct.
 - **Time:** ~40 min.
+
+## Phase 5 — One discount brain for every Razorpay agent (11 Oct 2026)
+
+- **AI did:**
+  - Seeded synthetic requests from the Cart Abandonment agent (`src/data/generator/agentDecisions.ts`): one month, sized from each group's abandoned checkouts × reachable share, with Neha's example included.
+  - `src/engine/discountBrain.ts` authorises only the live plan's offer, and only if recovery economics pay back. These are net of returns at the approved margin. The 10% holdout gets no discount; the kill switch authorises nothing.
+  - The Agent Studio Overview has a new "Decisions served to other agents" section: the summary KPIs, 20 latest rows with reasons and the collapsible illustrative API contract.
+  - The Cart Abandonment card shows the badge "Asks Smart Offers before offering a discount (simulated)".
+  - 2 tests.
+- **From the spec (Praveen):** the story, positioning line, examples (Neha → No offer; small ads 12% → 17%; lapsed 15% → 21%), API shape, holdout on recovery decisions.
+- **Assumed / decided:**
+  - The recovery rates for the other three groups are illustrative and labelled as such: big carts 14→19%, creator 20→22%, organic 16→20%. The reachable share is 60%.
+  - Neha's expected profit change is −₹26 per request, not the spec's −₹61. It is computed from the group AOV, the kept rate and the margin.
+- **Time:** ~35 min.

@@ -83,6 +83,8 @@ How AI tools were used, what they did, how they sped up the work, and where I ma
 
 - Phase 4 (flag `playbook`): "Stores like yours" card with the benchmark table vs your store, Why? drawers side by side, offers you haven't tried with Add as challenger (off-menu needs OK), Give-to-get toggle. Tests 145 passing; build passes.
 
+- Phase 5 (flag `discountBrain`): Cart Abandonment asks Smart Offers before discounting; decisions-served section (KPIs, 20 rows, API contract), holdout on recovery decisions. Tests 147 passing; build passes.
+
 <!-- Claude Code adds unclear spec points here with the option it chose. -->
 - v2 §7.2's decision rule ("challenger lower bound ≥ champion − tolerance") cannot promote with ~38 challenger shoppers. Chose: blend the store's result with the playbook (same trust weighting as the plan) and require cost lower, profit per shopper at least equal, and the store's lift gap within noise.
 - v2 §3.2 expects ALPHA10 ₹746 per extra order and ₹617 earned; the engine gives ₹730 (254.8 extra orders) and ₹614 (store AOV ₹1,516). Chose: keep the engine values and report them.
