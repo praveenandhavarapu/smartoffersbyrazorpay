@@ -1,13 +1,14 @@
 import { useState, type FormEvent } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Bank, Card, Clover, Grid, People, Search } from '../components/Icons';
+import { NotificationsBell } from '../components/lifecycle';
 
 const PAGES: { name: string; to: string }[] = [
   { name: 'Home', to: '/' }, { name: 'Transactions', to: '/transactions' }, { name: 'Payments', to: '/transactions' }, { name: 'Orders', to: '/transactions?tab=orders' },
   { name: 'Refunds', to: '/transactions?tab=refunds' }, { name: 'Disputes', to: '/transactions?tab=disputes' }, { name: 'Settlements', to: '/settlements' },
   { name: 'Reports', to: '/reports' }, { name: 'Offers & Coupons', to: '/offers' }, { name: 'Smart Offers', to: '/offers/smart' },
   { name: 'Ray AI', to: '/ray' }, { name: 'Agent Studio', to: '/studio' }, { name: 'Smart Offers Agent', to: '/studio/smart-offers' },
-  { name: 'Account & Settings', to: '/settings' }, { name: 'Banking+', to: '/banking' }, { name: 'Payroll', to: '/payroll' },
+  { name: 'Account & Settings', to: '/settings' }, { name: 'About this concept', to: '/about' }, { name: 'Weekly reviews', to: '/studio/smart-offers?tab=reviews' }, { name: 'Impact', to: '/studio/smart-offers?tab=impact' }, { name: 'Banking+', to: '/banking' }, { name: 'Payroll', to: '/payroll' },
 ];
 
 const isPayments = (p: string) => !/^\/(ray|studio|banking|payroll)/.test(p);
@@ -50,6 +51,7 @@ export function TopBar({ onMenu }: { onMenu: () => void }) {
         <Search />
         <input aria-label="Search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search pages, payment IDs, or ask Ray" />
       </form>
+      <NotificationsBell />
       <NavLink to="/settings" className="avatar" aria-label="Account">PR</NavLink>
     </header>
   );

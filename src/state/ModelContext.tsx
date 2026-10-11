@@ -20,9 +20,11 @@ export function ModelProvider({ children }: { children: ReactNode }) {
   const approvedSettings = useStore((s) => s.approvedSettings);
   const overrides = useStore((s) => s.overrides);
   const killed = useStore((s) => s.killed);
+  const moment = useStore((s) => s.moment);
+  const creatorFix = useStore((s) => s.creatorFix);
   const derived = useMemo(
-    () => (model ? derive(model, { settings, approved, approvedSettings, overrides, killed }) : null),
-    [model, settings, approved, approvedSettings, overrides, killed],
+    () => (model ? derive(model, { settings, approved, approvedSettings, overrides, killed, moment, creatorFix }) : null),
+    [model, settings, approved, approvedSettings, overrides, killed, moment, creatorFix],
   );
   if (error) {
     return (

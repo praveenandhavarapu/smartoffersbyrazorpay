@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useLedger } from '../../state/useLedger';
+import { DataEndNote } from '../components/lifecycle';
 import { lastDays, paymentSummary, inRange } from '../../data/ledgerQueries';
 import { OFFER_BY_ID } from '../../data/fixtures';
 import type { RzpOrder, RzpPayment } from '../../data/types';
@@ -72,6 +73,7 @@ export function Transactions() {
   return (
     <div className="page">
       <PageHeader title="Transactions" sub="Payments, orders, refunds and disputes" />
+      <DataEndNote />
       <div className="stat-hero card"><div className="stat-l">Collected amount</div><div className="stat-big">{inrP(sum.collected)}</div><div className="stat-s">from {num(sum.capturedCount)} captured payments · {DurationLabel(days)}</div></div>
       <div className="stats3">
         <Stat label="Refunds" value={inrP(sum.refunded)} sub={`${num(sum.refundsCount)} processed`} onClick={() => setTab('refunds')} />

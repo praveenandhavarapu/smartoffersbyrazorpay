@@ -16,7 +16,28 @@ type Ref = ReturnType<typeof tools.get_refunds_and_disputes>;
 
 const offersOn = (s: Sim) => s.rows.filter((r) => r.offer !== 'none');
 
+const top = (xs: string[], n = 3) => xs.slice(0, n).map((x) => `- ${x}`).join('\n');
+
 export const T = {
+  whyAi: (w: ReturnType<typeof tools.get_why_ai>) => `On the same shoppers, Smart Offers makes **${inrSigned(w.same_shoppers_monthly_profit[2].profit)} a month**, vs **${inrSigned(w.same_shoppers_monthly_profit[1].profit)}** for a simple rule and **${inrSigned(w.same_shoppers_monthly_profit[0].profit)}** for ALPHA10 for everyone.\n${top(w.capabilities, 4)}\nWant to set it up?`,
+  opportunities: (o: ReturnType<typeof tools.get_opportunities>) => {
+    const hit = o.signals.filter((x) => x.breached);
+    return `I found **${hit.length} signals** worth acting on.\n${top(hit.map((x) => `${x.label}: **${x.value}** (${x.threshold})`), 4)}${o.alerts.length ? `\n**Also:** ${o.alerts[0].title}.` : ''}\nShall I set up Smart Offers to fix it?`;
+  },
+  review: (r: ReturnType<typeof tools.get_weekly_review>) => {
+    if (!r.available) return `No weekly review yet. ${'reason' in r ? r.reason : ''}`;
+    const items = ('items' in r ? r.items : undefined) ?? [];
+    const changes = items.filter((i) => i.needs_approval);
+    return `**Week ${'week' in r ? r.week : ''} review** (${'date' in r ? r.date : ''}, ${'data_days' in r ? r.data_days : ''} days of data): ${changes.length ? `**${changes.length} change${changes.length > 1 ? 's' : ''}** need your approval.` : 'nothing needs your approval.'}\n${top(items.filter((i) => i.status !== 'control').map((i) => i.title), 4)}${'next_review' in r && r.next_review ? `\nNext review: ${r.next_review}.` : ''}`;
+  },
+  accuracy: (a: ReturnType<typeof tools.get_prediction_accuracy>, live: boolean) => live
+    ? `**${a.inside_range} of ${a.total}** estimates made before launch fell inside the measured 90% range (day ${a.day}); median error **${num(a.median_error_pp, 1)} pp**.\n${top(a.groups.map((g) => `${g.group}: estimated +${num(g.estimate_pp, 1)} pp, measured ${g.measured_pp >= 0 ? '+' : ''}${num(g.measured_pp, 1)} pp`), 4)}`
+    : 'Accuracy is measured once Smart Offers runs: the holdout checks every estimate made before launch.',
+  pilot: (p: ReturnType<typeof tools.get_pilot_decision>, live: boolean) => live
+    ? `${p.days_left > 0 ? `The free pilot ends in **${p.days_left} days**.` : '**The free pilot has ended.**'} Expected **${inrSigned(p.expected_profit_month)} a month**, return ${xr(p.return_x)} (range ${xr(p.return_range[0])}–${xr(p.return_range[1])}).\n- Proven: at least **${num(p.proven_extra_orders_at_least)} extra orders** over ${p.pilot_day} days\n- Fee if billed: **${inr(p.fee)}** (${p.fee_rule})\nYour choice: keep, extend 15 days, or stop.`
+    : 'The pilot decision comes 30 days after you approve a plan.',
+  impact: (m: ReturnType<typeof tools.get_impact_summary>) => `North star: **${m.north_star.metric}: ${inrSigned(m.north_star.value)}**.\n- Return **${xr(m.return_x)}** (break-even ${xr(m.break_even_x)})${m.estimates_inside_range ? `\n- Estimates inside measured range: **${m.estimates_inside_range}**` : ''}\n- Budget: **${inr(m.budget)}** a month, hard stop\nThe Impact tab in Agent Studio has the full metric tree and guardrails.`,
+  experiments: (e: ReturnType<typeof tools.get_next_experiments>) => `Here's what I'd test next. Each is a hypothesis with its own holdout and needs your approval:\n${top(e.experiments.map((x) => `**${x.title}**: ${x.why}`), 4)}`,
   help: () => "Here's what I can help with: payments, settlements, refunds and disputes for any period; how your coupons are doing; setting up Smart Offers and testing a budget, margin or return target; explaining why a shopper group gets an offer; and pilot results against the holdout.",
   payments: (s: Pay) => `${s.window}: **${inr(s.collected)}** collected from **${num(s.captured_payments)}** payments (${num(s.success_rate_pct, 1)}% success rate, ${num(s.failed_payments)} failed). UPI ${num(s.method_mix.upi.share_pct, 0)}%, cards ${num(s.method_mix.card.share_pct, 0)}%. ${s.refunds ? `${num(s.refunds)} refunds (${inr(s.refunded)}).` : 'No refunds.'} Fees ${inr(s.fees)} + GST ${inr(s.gst_on_fees)}.`,
   daily: (g: Daily) => `Day by day, ${g.window}: **${inr(g.total_collected)}** collected, about **${inr(g.average_per_day)} a day**. Best day ${g.best_day.date} (${inr(g.best_day.collected)}), lowest ${g.lowest_day.date} (${inr(g.lowest_day.collected)}). The second half of the period is ${g.second_half_vs_first_half_pct >= 0 ? 'up' : 'down'} ${num(Math.abs(g.second_half_vs_first_half_pct), 1)}% on the first.`,

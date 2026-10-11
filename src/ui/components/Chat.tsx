@@ -8,6 +8,9 @@ import { inr, inrSigned, num, pctSigned, xr } from '../../lib/format';
 import { OFFER_BY_ID } from '../../data/fixtures';
 import { Clover, Send } from './Icons';
 import { Markdown } from './Markdown';
+import { AccuracyTable, ExperimentsList, OpportunityPanel, PilotDecisionCard, ReviewCard, WhyAI } from './lifecycle';
+import { useModel } from '../../state/ModelContext';
+import { ImpactMini } from './RayCards';
 import { OfferChip, shortGroup } from './bits';
 import { PlanCard } from './PlanCard';
 import { ApprovedCard, CreatorsCard, DailyCard, PaymentsCard, PaymentsListCard, RefundsCard, ResultsCard, SettlementsCard, WasteCard } from './RayCards';
@@ -77,6 +80,17 @@ export function DraftCard({ draft }: { draft: Draft }) {
   );
 }
 
+function LatestReview() {
+  const { derived } = useModel();
+  return derived.reviews[0] ? <ReviewCard review={derived.reviews[0]} /> : null;
+}
+
+function CurrentAccuracy() {
+  const { derived } = useModel();
+  const moment = useStore((s) => s.moment);
+  return <AccuracyTable snap={moment === 'day30' ? derived.snapshots.day30 : derived.snapshots.day20} />;
+}
+
 function CardView({ card, onAsk }: { card: RayCard; onAsk: (q: string) => void }) {
   const approved = useStore((s) => s.approved);
   switch (card.kind) {
@@ -91,6 +105,13 @@ function CardView({ card, onAsk }: { card: RayCard; onAsk: (q: string) => void }
     case 'refunds': return <RefundsCard d={card.data} />;
     case 'results': return <ResultsCard d={card.data} />;
     case 'creators': return <CreatorsCard />;
+    case 'opportunities': return <OpportunityPanel />;
+    case 'why_ai': return <WhyAI />;
+    case 'review': return <LatestReview />;
+    case 'accuracy': return <CurrentAccuracy />;
+    case 'decision': return <PilotDecisionCard />;
+    case 'impact': return <ImpactMini />;
+    case 'experiments': return <ExperimentsList />;
     case 'help': return <div className="chips">{card.items.map((i) => <button key={i.label} className="chip" onClick={() => onAsk(i.message)}>{i.label}</button>)}</div>;
     default: return null;
   }

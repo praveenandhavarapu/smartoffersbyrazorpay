@@ -10,6 +10,7 @@ import { Studio } from './ui/screens/Studio';
 import { StudioAgent } from './ui/screens/StudioAgent';
 import { Settings } from './ui/screens/Settings';
 import { Banking, Payroll, ProductPage } from './ui/screens/Simple';
+import { About } from './ui/screens/About';
 
 /** Remount on query change so deep links (search, ?tab=) reset the page state. */
 function Keyed({ children }: { children: (k: string) => JSX.Element }) {
@@ -31,4 +32,5 @@ export const ROUTES = [
   { path: '/studio/smart-offers', element: <StudioAgent />, shell: 'studio' },
   { path: '/banking', element: <Banking />, shell: 'plain' },
   { path: '/payroll', element: <Payroll />, shell: 'plain' },
+  { path: '/about', element: <About />, shell: 'plain' },
 ] as const;

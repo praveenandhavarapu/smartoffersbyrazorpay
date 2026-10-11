@@ -36,16 +36,31 @@ type Persisted = {
   rayMode: 'live' | 'demo';
   settlementMode: 't1' | 'instant';
   instantSettlements: InstantSettlement[];
+  reviewDecisions: Record<string, 'approved' | 'dismissed'>;
+  reviewsOpened: string[];
+  notificationsRead: string[];
+  pilotDecision: 'keep' | 'extend' | 'stop' | null;
+  alpha10Restored: boolean;
+  experiments: Record<string, 'approved' | 'declined'>;
+  outageEvents: number;
   audit: AuditEntry[];
 };
 
-type Ephemeral = { snapshot: 'day20' | 'day60'; outage: boolean };
+export type Snap = 'day7' | 'day14' | 'day20' | 'day30' | 'day60';
+type Ephemeral = { snapshot: Snap; outage: boolean };
 
 type Actions = {
   setSettings: (patch: Partial<Settings>) => void;
   approve: () => void;
   jump20: () => void;
-  setSnapshot: (s: 'day20' | 'day60') => void;
+  setSnapshot: (s: Snap) => void;
+  jump30: () => void;
+  decideReview: (id: string, d: 'approved' | 'dismissed', summary: string) => void;
+  openReview: (id: string) => void;
+  markRead: (ids: string[]) => void;
+  decidePilot: (d: 'keep' | 'extend' | 'stop', summary: string) => void;
+  stopSmartOffers: (restoreAlpha10: boolean, summary: string) => void;
+  decideExperiment: (id: string, d: 'approved' | 'declined', summary: string) => void;
   applyOverride: (g: GroupId, o: OfferId, from: OfferId, costNote: string, actor?: Actor) => void;
   clearOverride: (g: GroupId) => void;
   kill: () => void;
@@ -63,7 +78,9 @@ export type AppState = Persisted & Ephemeral & Actions;
 
 const initial: Persisted = {
   settings: DEFAULT_USER_SETTINGS, approved: false, approvedSettings: null, overrides: {}, killed: false,
-  moment: 'before', creatorFix: 'pending', rayMode: 'live', settlementMode: 't1', instantSettlements: [], audit: [],
+  moment: 'before', creatorFix: 'pending', rayMode: 'live', settlementMode: 't1', instantSettlements: [],
+  reviewDecisions: {}, reviewsOpened: [], notificationsRead: [], pilotDecision: null, alpha10Restored: false, experiments: {}, outageEvents: 0,
+  audit: [],
 };
 
 function load(): Persisted {
@@ -88,7 +105,9 @@ function save(s: Persisted): void {
 const pick = (s: AppState): Persisted => ({
   settings: s.settings, approved: s.approved, approvedSettings: s.approvedSettings, overrides: s.overrides,
   killed: s.killed, moment: s.moment, creatorFix: s.creatorFix, rayMode: s.rayMode, settlementMode: s.settlementMode,
-  instantSettlements: s.instantSettlements, audit: s.audit,
+  instantSettlements: s.instantSettlements, reviewDecisions: s.reviewDecisions, reviewsOpened: s.reviewsOpened,
+  notificationsRead: s.notificationsRead, pilotDecision: s.pilotDecision, alpha10Restored: s.alpha10Restored,
+  experiments: s.experiments, outageEvents: s.outageEvents, audit: s.audit,
 });
 
 const describe = (s: Settings) =>
@@ -114,6 +133,25 @@ export const useStore = create<AppState>((set, get) => {
     },
     jump20: () => set({ moment: 'day20', snapshot: 'day20' }),
     setSnapshot: (snapshot) => set({ snapshot }),
+    jump30: () => set({ moment: 'day30', snapshot: 'day30' }),
+    decideReview: (id, d, summary) => {
+      set((st) => ({ reviewDecisions: { ...st.reviewDecisions, [id]: d } }));
+      log('Merchant (Praveen)', 'review', `${d === 'approved' ? 'Approved' : 'Dismissed'} review item: ${summary}`);
+    },
+    openReview: (id) => set((st) => (st.reviewsOpened.includes(id) ? st : { reviewsOpened: [...st.reviewsOpened, id] })),
+    markRead: (ids) => set((st) => ({ notificationsRead: [...new Set([...st.notificationsRead, ...ids])] })),
+    decidePilot: (d, summary) => {
+      set(d === 'stop' ? { pilotDecision: d, killed: true } : { pilotDecision: d });
+      log('Merchant (Praveen)', 'pilot_decision', summary, 'free pilot', d === 'keep' ? 'kept (billed monthly)' : d === 'extend' ? 'pilot extended 15 days' : 'stopped');
+    },
+    stopSmartOffers: (restoreAlpha10, summary) => {
+      set({ killed: true, alpha10Restored: restoreAlpha10 });
+      log('Merchant (Praveen)', 'kill_switch', summary, 'plan live', restoreAlpha10 ? 'stopped; ALPHA10 restored' : 'stopped; no offers');
+    },
+    decideExperiment: (id, d, summary) => {
+      set((st) => ({ experiments: { ...st.experiments, [id]: d } }));
+      log('Merchant (Praveen)', 'experiment', `${d === 'approved' ? 'Approved' : 'Declined'} experiment: ${summary}`);
+    },
     applyOverride: (g, o, from, costNote, actor = 'Merchant (Praveen)') => {
       set((st) => ({ overrides: { ...st.overrides, [g]: o } }));
       log(actor, 'override', `Override ${g}: ${costNote}`, from, o);
@@ -132,10 +170,10 @@ export const useStore = create<AppState>((set, get) => {
       log('Merchant (Praveen)', 'kill_switch', 'Kill switch: every group set to no offer', 'plan live', 'all offers off');
     },
     resume: () => {
-      set({ killed: false });
+      set({ killed: false, alpha10Restored: false, pilotDecision: get().pilotDecision === 'stop' ? null : get().pilotDecision });
       log('Merchant (Praveen)', 'resume', 'Resumed Smart Offers', 'all offers off', 'plan live');
     },
-    setOutage: (outage) => set({ outage }),
+    setOutage: (outage) => set((st) => ({ outage, outageEvents: outage ? st.outageEvents + 1 : st.outageEvents })),
     setCreatorFix: (v) => {
       set({ creatorFix: v });
       log('Merchant (Praveen)', 'creator_fix', v === 'limited' ? 'MEERA15 limited to first orders' : 'MEERA15 kept as is', 'any order', v === 'limited' ? 'first orders only' : 'any order');

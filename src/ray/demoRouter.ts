@@ -20,7 +20,8 @@ export type RayCard =
   | { kind: 'settlements'; data: ReturnType<typeof tools.get_settlements> }
   | { kind: 'refunds'; data: ReturnType<typeof tools.get_refunds_and_disputes> }
   | { kind: 'results'; data: ReturnType<typeof tools.get_results> }
-  | { kind: 'creators' };
+  | { kind: 'creators' }
+  | { kind: 'opportunities' } | { kind: 'why_ai' } | { kind: 'review' } | { kind: 'accuracy' } | { kind: 'decision' } | { kind: 'impact' } | { kind: 'experiments' };
 
 export type RayReply = { intent: string; text: string; card?: RayCard; quick?: QuickReply[]; toolCalls: ToolCall[]; refused?: boolean; startSetup?: boolean };
 
@@ -58,6 +59,7 @@ export const FOLLOW_UPS: Record<string, QuickReply[]> = {
   ],
   offers: [
     { label: 'Set up Smart Offers', message: 'Set up Smart Offers' },
+    { label: 'Why AI, not a rule?', message: 'Why AI, not a simple rule?' },
     { label: 'Are creator codes leaking?', message: 'Are creator codes leaking?' },
     { label: 'What do similar stores see?', message: 'What do similar stores typically see?' },
   ],
@@ -68,6 +70,10 @@ export const FOLLOW_UPS: Record<string, QuickReply[]> = {
     { label: 'Why no offer for returning buyers?', message: 'Why does returning get no offer?' },
   ],
   results: [
+    { label: 'What changed this week?', message: 'What changed this week?' },
+    { label: 'How accurate were your estimates?', message: 'How accurate were your estimates?' },
+    { label: 'Should I keep Smart Offers?', message: 'Should I keep Smart Offers after the pilot?' },
+    { label: 'What should I try next?', message: 'What should I try next?' },
     { label: 'Why no offer for returning buyers?', message: 'Why does returning get no offer?' },
     { label: 'Give returning customers ₹100 off', message: 'Give returning customers ₹100 off' },
     { label: 'How much will I make next month?', message: 'How much will I make next month exactly?' },
@@ -110,6 +116,7 @@ export function parseAmount(t: string): number | null {
 const SHOPPERS = ['priya', 'rohan', 'aisha', 'kavya', 'neha', 'vikram', 'sameer'];
 
 const HELP: QuickReply[] = [
+  { label: 'Anything I should fix?', message: 'Anything I should fix?' },
   { label: 'Payments last 7 days', message: 'Show my payments for the last 7 days' },
   { label: 'Settlements', message: 'Show my settlements for the last 7 days' },
   { label: 'Offers & coupons', message: 'How are my offers and coupons doing?' },
@@ -166,6 +173,36 @@ export function route(message: string, ctx: RayCtx): RayReply {
   // Account and support.
   if (/^(manage (my )?account|account settings?)\b/.test(t)) return reply('account', 'Account & Settings has your business profile, settlement schedule (next day or instant), Ray mode (Live or Demo), Smart Offers guardrails and the audit log. Open it from the left menu.', { quick: HELP });
   if (/^(support|help|help & support)$/.test(t)) return reply('help', T.help(), { card: { kind: 'help', items: HELP } });
+
+  // Lifecycle: opportunities, why AI, weekly review, accuracy, pilot decision, impact, next experiments.
+  if (/\bwhy (use )?ai\b|\bwhy not (just )?a (simple |fixed )?rule\b|\bbetter than a rule\b|\bwhat does (the )?ai do\b/.test(t)) {
+    const w = call('get_why_ai', {}, () => tools.get_why_ai(ctx));
+    return reply('why_ai', T.whyAi(w), { card: { kind: 'why_ai' }, quick: FOLLOW_UPS.offers });
+  }
+  if (/\bopportunit|\banything (i should|to) (fix|know|do)\b|\bwhat should i (fix|look at)\b|\balerts?\b|\bnotifications?\b/.test(t)) {
+    const o = call('get_opportunities', {}, () => tools.get_opportunities(ctx));
+    return reply('opportunities', T.opportunities(o), { card: { kind: 'opportunities' }, quick: FOLLOW_UPS.offers });
+  }
+  if (/\bweekly review\b|\bwhat changed\b|\bthis week\b|\bmonday\b|\breview\b/.test(t) && !/\breviews? (of|for) (my )?(store|product)\b/.test(t)) {
+    const r = call('get_weekly_review', {}, () => tools.get_weekly_review(ctx));
+    return reply('weekly_review', T.review(r), { card: r.available ? { kind: 'review' } : undefined, quick: FOLLOW_UPS.results });
+  }
+  if (/\bhow accurate\b|\baccuracy\b|\bpredict(ed|ion|ions)?\b|\bestimates?\b.*\b(right|wrong|accurate)\b/.test(t)) {
+    const a = call('get_prediction_accuracy', {}, () => tools.get_prediction_accuracy(ctx));
+    return reply('accuracy', T.accuracy(a, ctx.approved), { card: ctx.approved ? { kind: 'accuracy' } : undefined, quick: FOLLOW_UPS.results });
+  }
+  if (/\bshould i keep\b|\bkeep smart offers\b|\bpilot (end|ends|ending|decision)\b|\bday 30\b|\bafter the pilot\b|\bworth (it|paying)\b/.test(t)) {
+    const p = call('get_pilot_decision', {}, () => tools.get_pilot_decision(ctx));
+    return reply('pilot_decision', T.pilot(p, ctx.approved), { card: ctx.approved ? { kind: 'decision' } : undefined, quick: FOLLOW_UPS.results });
+  }
+  if (/\bimpact\b|\bnorth star\b|\bsuccess metrics?\b|\bhow do (we|you|i) (know|measure)\b/.test(t)) {
+    const m = call('get_impact_summary', {}, () => tools.get_impact_summary(ctx));
+    return reply('impact', T.impact(m), { card: { kind: 'impact' }, quick: FOLLOW_UPS.results });
+  }
+  if (/\bwhat (should|can) i (try|test|do) next\b|\bnext experiments?\b|\bwhat else\b|\bexpand\b|\bgrow more\b/.test(t)) {
+    const e = call('get_next_experiments', {}, () => tools.get_next_experiments(ctx));
+    return reply('experiments', T.experiments(e), { card: { kind: 'experiments' }, quick: FOLLOW_UPS.results });
+  }
 
   // Day-on-day trend / graph.
   if (/\bdod\b|\bday[- ]?on[- ]?day\b|\bday[- ]?by[- ]?day\b|\bdaily\b|\bper day\b|\bgraph\b|\bchart\b|\btrend\b|\beach day\b/.test(t) && !/\boffers?\b|\bcoupons?\b|\bplan\b|\bruns?\b/.test(t)) {

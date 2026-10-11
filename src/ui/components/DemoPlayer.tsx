@@ -7,7 +7,7 @@ import { useDemo } from './demoStore';
 import { Pause, Play } from './Icons';
 
 type Step = { route: string; caption: string; run?: () => void | Promise<void> };
-const STEP_MS = 6000;
+const STEP_MS = 5800; // 15 steps ≈ 87 s
 const scrollTo = (sel: string) => setTimeout(() => document.querySelector(sel)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200);
 
 /**
@@ -18,27 +18,26 @@ const scrollTo = (sel: string) => setTimeout(() => document.querySelector(sel)?.
 export function DemoPlayer() {
   const nav = useNavigate();
   const ask = useRay();
-  const { open, playing, step, setStep, setPlaying, close, setShopper, openOverride, closeOverride } = useDemo();
+  const { open, playing, step, setStep, setPlaying, close, setShopper, closeOverride } = useDemo();
   const savedMode = useRef<'live' | 'demo' | null>(null);
 
   const steps: Step[] = useMemo(() => [
-    { route: '/', caption: 'The payments dashboard: six months of collections, settlements, and a Ray insight about last month\'s coupon' },
-    { route: '/ray', caption: 'Ask Ray: "How are my offers and coupons doing?"', run: () => { useChat.getState().clear(); return ask('How are my offers and coupons doing?'); } },
-    { route: '/ray', caption: 'Ray offers to fix it. Setup is four quick questions', run: () => ask('Set up Smart Offers') },
-    { route: '/ray', caption: 'Monthly offer budget', run: () => ask('₹1,00,000') },
-    { route: '/ray', caption: 'What the merchant keeps from a ₹1,000 sale (sets the break-even)', run: () => ask('₹400') },
-    { route: '/ray', caption: 'Goal and rules → the plan: an offer, or none, per shopper group, chosen for profit', run: async () => { await ask('Most profit'); await ask('Yes'); scrollTo('#plan-card'); } },
+    { route: '/', caption: 'The payments dashboard. Ray has spotted something: see the insight and the bell' },
+    { route: '/ray', caption: 'Ask Ray "Anything I should fix?": the signals behind it, each against a threshold', run: () => { useChat.getState().clear(); return ask('Anything I should fix?'); } },
+    { route: '/ray', caption: 'Why AI, not a rule: same shoppers, three options, and what a rule can\'t do', run: () => ask('Why AI, not a simple rule?') },
+    { route: '/ray', caption: 'Set up Smart Offers: four quick questions', run: () => ask('Set up Smart Offers') },
+    { route: '/ray', caption: 'Monthly budget, and what the merchant keeps from a ₹1,000 sale', run: async () => { await ask('₹1,00,000'); await ask('₹400'); } },
+    { route: '/ray', caption: 'Goal and rules → the plan: an offer or none per group, chosen for profit; the holdout\'s cost shown up front', run: async () => { await ask('Most profit'); await ask('Yes'); scrollTo('#plan-card'); } },
     { route: '/ray', caption: 'Approve & go live: only a human click spends money', run: () => { useStore.getState().approve(); scrollTo('.ok-card'); } },
-    { route: '/offers/smart?tab=checkout', caption: '20 days later. Priya, new from an Instagram ad, sees her group\'s offer at checkout', run: () => { useStore.getState().jump20(); setShopper('priya'); } },
+    { route: '/offers/smart?tab=checkout', caption: '20 days later. Priya, new from an Instagram ad, sees her group\'s offer', run: () => { useStore.getState().jump20(); setShopper('priya'); } },
     { route: '/offers/smart?tab=checkout', caption: 'Neha, a returning buyer, sees no offer: she buys anyway', run: () => setShopper('neha') },
-    { route: '/offers/smart', caption: 'Results against the 10% holdout, with honest ranges and "still learning"' },
-    { route: '/offers/smart', caption: 'Override: give returning buyers ₹100 off. The cost shows before you apply', run: () => openOverride('returning', 'flat_100') },
-    { route: '/offers/smart', caption: 'Cancel. Ray states the cost once and never nags', run: () => closeOverride() },
-    { route: '/studio/smart-offers?tab=runs', caption: 'Agent Studio: the Smart Offers Agent runs every day at 06:00 within budget' },
-    { route: '/studio/smart-offers?tab=transactions', caption: 'Every checkout it decided, with the group, holdout arm and offer' },
-    { route: '/studio/smart-offers', caption: 'Kill switch: every group to no offer, instantly, logged', run: () => useStore.getState().kill() },
-    { route: '/studio/smart-offers?tab=activity', caption: 'Resume. Every action is in the activity log', run: () => useStore.getState().resume() },
-  ], [ask, setShopper, openOverride, closeOverride]);
+    { route: '/offers/smart', caption: 'Proof against the 10% holdout, and the estimates made before launch vs what was measured', run: () => scrollTo('.dtable.compact') },
+    { route: '/studio/smart-offers?tab=reviews', caption: 'Every Monday, a review: what\'s proven, what\'s still learning, what to change' },
+    { route: '/studio/smart-offers?tab=reviews', caption: 'The merchant approves the creator-code fix in one tap. Logged.', run: () => { useStore.getState().setCreatorFix('limited'); useStore.getState().decideReview('w2-creator', 'approved', 'MEERA15: limit to first orders'); } },
+    { route: '/offers/smart', caption: 'Day 30: the pilot ends. Proven results and the fee, then the merchant decides', run: () => { useStore.getState().jump30(); scrollTo('.decision'); } },
+    { route: '/offers/smart', caption: 'Keep Smart Offers: billed 1% of proven extra sales only', run: () => { const p = useStore.getState(); p.decidePilot('keep', 'Kept Smart Offers after the pilot'); scrollTo('.decision'); } },
+    { route: '/studio/smart-offers?tab=impact', caption: 'Impact: one north-star metric, the outcomes behind it, and the guardrails that must not get worse' },
+  ], [ask, setShopper]);
 
   const goTo = useCallback(async (target: number, replay: boolean) => {
     const t = Math.max(0, Math.min(steps.length - 1, target));
@@ -52,7 +51,7 @@ export function DemoPlayer() {
     nav(steps[t].route);
     setStep(t);
     await steps[t].run?.();
-  }, [steps, nav, setStep, closeOverride]);
+  }, [steps, nav, setStep, closeOverride]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (open && step === 0) {

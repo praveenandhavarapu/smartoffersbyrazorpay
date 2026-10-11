@@ -12,6 +12,7 @@ export function Offers() {
   const approved = useStore((s) => s.approved);
   const killed = useStore((s) => s.killed);
   const creatorFix = useStore((s) => s.creatorFix);
+  const alpha10Restored = useStore((s) => s.alpha10Restored);
   const a10 = EXISTING_CODES.find((c) => c.code === 'ALPHA10')!;
   return (
     <div className="page">
@@ -33,7 +34,7 @@ export function Offers() {
               <tr className="row-link" onClick={() => nav('/ray?ask=Where did ALPHA10 go last month?')}>
                 <td><b>ALPHA10</b></td><td>{a10.value}% off, max ₹{a10.max_discount_inr}</td><td>{a10.where}</td><td>{inr(derived.a10.spend)}</td>
                 <td className={derived.a10.ret < derived.breakEven ? 'bad' : ''}>{xr(derived.a10.ret)}</td>
-                <td>{approved ? <span className="status warn">retired 21 Sep</span> : <span className="status ok">active</span>}</td>
+                <td>{alpha10Restored ? <span className="status ok">restored</span> : approved ? <span className="status warn">retired 21 Sep</span> : <span className="status ok">active</span>}</td>
               </tr>
               {derived.creators.rows.map((c) => (
                 <tr key={c.code}>

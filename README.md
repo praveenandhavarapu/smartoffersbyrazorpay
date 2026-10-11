@@ -29,8 +29,21 @@ A dashboard in the style of a payments console (no brand assets; concept label a
 | Offers & Coupons | `/offers`, `/offers/smart` | Coupons, and Smart Offers: results, setup & plan, checkout preview, creator codes |
 | Ray AI | `/ray` | Chat with Ray. Live (Claude) or Demo toggle; guided setup; cards and follow-up suggestions |
 | Agent Studio | `/studio`, `/studio/smart-offers` | Smart Offers Agent: daily 06:00 runs, transactions it decided, guardrails, activity log, kill switch |
+| Agent Studio → Weekly reviews / Impact | `/studio/smart-offers?tab=reviews`, `?tab=impact` | Monday reviews with approvals; north-star metric, outcomes, funnel, engagement, prediction accuracy, guardrails |
+| About this concept | `/about` | Why this problem (selection scoring), merchant and current workflow, product loop, what we left out, risks |
 | Account & Settings | `/settings` | Ray mode and health, settlement schedule, data sources, outage simulator, audit log, reset |
 | Banking+, Payroll, other products | `/banking`, `/payroll`, `/products/*` | Overview pages (outside this concept's scope) |
+
+**Product lifecycle in the prototype:**
+- **Find:** Ray's opportunity signals with thresholds, plus a notification bell.
+- **Decide and approve:** "why AI, not a rule" on the same shoppers; plan with holdout cost; Approve.
+- **Run:** daily 06:00 agent runs.
+- **Prove:** results against the holdout, and predicted vs measured lift.
+- **Review weekly:** Monday reviews, no verdicts before day 14, approve changes.
+- **Decide on day 30:** keep, extend or stop, with the fee on proven sales.
+- **Grow:** next experiments needing approval.
+- **Exit:** stop, or restore ALPHA10, with the cost stated once.
+- **Measure:** the Impact tab.
 
 **Play demo** (bottom bar) runs a scripted walkthrough of about 90 seconds, with Back, Pause and Next. Ray uses scripted answers while it plays, so the video is repeatable.
 

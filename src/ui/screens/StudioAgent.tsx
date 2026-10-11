@@ -10,10 +10,12 @@ import { DEMO_DATES, fmtDate } from '../../lib/dates';
 import { dateTimeIST, inr, inrP2, inrSigned, num, xr } from '../../lib/format';
 import { Check, X } from '../components/Icons';
 import { Pager, Status, Tabs } from '../components/kit';
+import { ExperimentsList, ReviewsList, StopButton, WhyAI } from '../components/lifecycle';
+import { ImpactView } from '../components/Impact';
 import { OfferChip, shortGroup } from '../components/bits';
 import type { GroupId } from '../../data/types';
 
-type Tab = 'overview' | 'runs' | 'transactions' | 'guardrails' | 'activity';
+type Tab = 'overview' | 'reviews' | 'impact' | 'runs' | 'transactions' | 'guardrails' | 'activity';
 const CAN = ['Read checkout, order and coupon data', 'Run approved offers within budget', 'Simulate plans and scenarios', 'Pause offers that fall below break-even'];
 const CANNOT = ['Change product prices', 'Exceed the monthly budget', 'Launch without your approval', 'Message shoppers', 'Use device, gender or income'];
 const PAGE = 25;
@@ -41,6 +43,8 @@ export function StudioAgent() {
   const d20 = derived.snapshots.day20;
   const status = !approved ? 'Not installed' : killed ? 'Paused (kill switch)' : moment === 'before' ? 'Approved · first run 06:00' : 'Running daily · 06:00';
   const label = (g: string) => shortGroup(model.groups.find((x) => x.id === g)!.label);
+  const decisions = useStore((x) => x.reviewDecisions);
+  const pendingReviews = derived.reviews.reduce((a, r) => a + r.items.filter((i) => i.action && !decisions[i.id]).length, 0);
 
   return (
     <div className="studio">
@@ -51,9 +55,9 @@ export function StudioAgent() {
         <span className="sp" />
         {!approved ? <button className="btn primary sm" onClick={() => nav('/offers/smart?tab=plan')}>Install &amp; set up</button>
           : killed ? <button className="btn primary sm" onClick={resume}>Resume</button>
-          : <button className="btn dark sm" onClick={kill}>Kill switch</button>}
+          : <><StopButton className="btn dark sm" label="Stop…" /><button className="btn dark sm" onClick={kill}>Kill switch</button></>}
       </div>
-      <div className="st-tabs"><Tabs<Tab> value={tab} onChange={(t) => setSp({ tab: t })} items={[{ id: 'overview', label: 'Overview' }, { id: 'runs', label: 'Runs' }, { id: 'transactions', label: 'Transactions' }, { id: 'guardrails', label: 'Guardrails' }, { id: 'activity', label: 'Activity log' }]} /></div>
+      <div className="st-tabs"><Tabs<Tab> value={tab} onChange={(t) => setSp({ tab: t })} items={[{ id: 'overview', label: 'Overview' }, { id: 'reviews', label: <>Weekly reviews{pendingReviews > 0 && <span className="tab-n">{pendingReviews}</span>}</> }, { id: 'impact', label: 'Impact' }, { id: 'runs', label: 'Runs' }, { id: 'transactions', label: 'Transactions' }, { id: 'guardrails', label: 'Guardrails' }, { id: 'activity', label: 'Activity log' }]} /></div>
 
       {tab === 'overview' && (
         <>
@@ -91,6 +95,16 @@ export function StudioAgent() {
               {CANNOT.map((c) => <div key={c} className="n2"><X />Cannot: {c.toLowerCase()}</div>)}
             </div>
           </section>
+          <section className="st-sec st-light">
+            <div className="st-label">Why AI</div>
+            <h3>What it does that a fixed rule can't</h3>
+            <WhyAI />
+          </section>
+          <section className="st-sec st-light">
+            <div className="st-label">Grow</div>
+            <h3>Next experiments (each needs your approval)</h3>
+            <ExperimentsList />
+          </section>
           <section className="st-sec">
             <div className="pricebar">
               <div><b>Free 30-day pilot</b><span>Then 1% of proven extra sales, capped at 20% of extra profit. Proven = lower bound of the 90% range.</span></div>
@@ -98,6 +112,22 @@ export function StudioAgent() {
             </div>
           </section>
         </>
+      )}
+
+      {tab === 'reviews' && (
+        <section className="st-sec st-light">
+          <h3>Weekly reviews</h3>
+          <p className="st-p">Every Monday at 06:00 Ray reads what the holdout measured, re-plans with it, and lists what to keep, watch or change. Changes need your approval.</p>
+          <ReviewsList />
+        </section>
+      )}
+
+      {tab === 'impact' && (
+        <section className="st-sec st-light">
+          <h3>Impact</h3>
+          <p className="st-p">How we know Smart Offers works: one north-star metric, the outcomes behind it, and the guardrails that must not get worse.</p>
+          <ImpactView />
+        </section>
       )}
 
       {tab === 'runs' && (

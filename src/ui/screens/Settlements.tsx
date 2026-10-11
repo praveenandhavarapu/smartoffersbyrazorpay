@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLedger } from '../../state/useLedger';
+import { DataEndNote } from '../components/lifecycle';
 import { useStore } from '../../state/store';
 import { instantFee, lastDays, settlementSummary, unsettledBalance } from '../../data/ledgerQueries';
 import { INSTANT_FEE_RATE } from '../../data/generator/ledger';
@@ -29,6 +30,7 @@ export function Settlements() {
   return (
     <div className="page">
       <PageHeader title="Settlements" sub="Collected payments are paid to your bank account after platform fees, GST and refunds." actions={<button className="btn secondary" onClick={() => nav('/settings#settlement')}>Schedule: {mode === 't1' ? 'T+1' : 'Instant + T+1'}</button>} />
+      <DataEndNote />
       <div className="stats3">
         <Stat label="Settled" value={inrP(sum.amount)} sub={`${num(sum.count)} settlements · fees + GST ${inrP(sum.fees)}`} />
         <Stat label="Next settlement" value={sum.next ? inrP(sum.next.amount) : '—'} sub={sum.next ? `${dateTimeIST(sum.next.created_at)} (T+1)` : 'nothing scheduled'} />

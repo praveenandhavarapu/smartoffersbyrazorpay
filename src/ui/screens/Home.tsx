@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useModel } from '../../state/ModelContext';
 import { useStore } from '../../state/store';
 import { useLedger } from '../../state/useLedger';
+import { DataEndNote } from '../components/lifecycle';
 import { useChat } from '../../ray/chatStore';
 import { lastDays, monthly, paymentSummary, settlementSummary } from '../../data/ledgerQueries';
 import { dateTimeIST, inr, inrP, inrP2, inrSigned, num, pctOf, xr } from '../../lib/format';
@@ -15,6 +16,7 @@ export function Home() {
   const v = useLedger();
   const approved = useStore((s) => s.approved);
   const killed = useStore((s) => s.killed);
+  const moment = useStore((s) => s.moment);
   const queue = useChat((s) => s.queue);
   const r30 = lastDays(v, 30);
   const s30 = paymentSummary(v, r30);
@@ -31,10 +33,16 @@ export function Home() {
         <button className="btn secondary" onClick={() => nav('/ray')}><Clover width={14} style={{ color: 'var(--clover)' }} /> Ask Ray</button>
       </div>
 
+      <DataEndNote />
       <section className="ray-banner" aria-label="Ray insight">
         <div className="rb-ic"><Clover /></div>
         <div className="rb-body">
-          {approved ? (
+          {approved && moment === 'day30' && !killed ? (
+            <>
+              <b>Your free pilot ended. Keep Smart Offers?</b>
+              <span> Expected {inrSigned(derived.pilot.expectedProfitMonth)} a month; fee about {inr(derived.pilot.fee.fee)}, only on proven extra sales.</span>
+            </>
+          ) : approved ? (
             <>
               <b>Smart Offers is {killed ? 'paused' : 'live'}.</b>
               <span> Day 20: {inrSigned(derived.snapshots.day20.profit)} extra profit vs the holdout, return {xr(derived.snapshots.day20.ret)}. ALPHA10 would have lost {inr(Math.abs(derived.snapshots.day20.alpha10SamePeriod))} in the same period.</span>
@@ -47,8 +55,8 @@ export function Home() {
           )}
         </div>
         <div className="rb-actions">
-          {approved ? <button className="btn primary sm" onClick={() => nav('/offers/smart')}>View results</button> : <button className="btn primary sm" onClick={() => ask('How are my offers and coupons doing?')}>Ask Ray why</button>}
-          <button className="btn secondary sm" onClick={() => nav(approved ? '/studio/smart-offers' : '/offers/smart')}>{approved ? 'Agent runs' : 'Fix with Smart Offers'}</button>
+          {approved && moment === 'day30' && !killed ? <button className="btn primary sm" onClick={() => nav('/offers/smart')}>Decide</button> : approved ? <button className="btn primary sm" onClick={() => nav('/offers/smart')}>View results</button> : <button className="btn primary sm" onClick={() => ask('How are my offers and coupons doing?')}>Ask Ray why</button>}
+          <button className="btn secondary sm" onClick={() => nav(approved ? '/studio/smart-offers?tab=reviews' : '/offers/smart')}>{approved ? 'Weekly review' : 'Fix with Smart Offers'}</button>
         </div>
       </section>
 

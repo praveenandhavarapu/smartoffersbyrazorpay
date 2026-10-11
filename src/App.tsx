@@ -23,19 +23,19 @@ export default function App() {
   const shell = route?.shell ?? 'payments';
   return (
     <div className={`app shell-${shell}`}>
-      <TopBar onMenu={() => setMenu(!menu)} />
-      <div className="app-body">
-        {shell === 'payments' && <Sidebar open={menu} onClose={() => setMenu(false)} />}
-        <main className="app-main">
-          <ModelProvider>
+      <ModelProvider>
+        <TopBar onMenu={() => setMenu(!menu)} />
+        <div className="app-body">
+          {shell === 'payments' && <Sidebar open={menu} onClose={() => setMenu(false)} />}
+          <main className="app-main">
             <Routes>
               {ROUTES.map((r) => <Route key={r.path} path={r.path} element={r.element} />)}
               <Route path="*" element={<NotFound />} />
             </Routes>
             <DemoPlayer />
-          </ModelProvider>
-        </main>
-      </div>
+          </main>
+        </div>
+      </ModelProvider>
       <ConceptBar />
     </div>
   );
