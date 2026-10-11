@@ -111,3 +111,9 @@
 .concept-bar.v2 { padding-right: 150px; }
 .demo-bar.left { left: 12px; transform: none; width: min(720px, calc(100% - 24px - 150px)); }
 @media (max-width: 720px) { .concept-bar.v2 { padding-right: 14px; } .demo-bar.left { width: calc(100% - 24px); } }
+/* Phase 10: leak radar */
+.leak { display: grid; gap: 8px; }
+.leak h5 { margin: 0; font-size: 14px; }
+.leak-bars { display: flex; align-items: flex-end; gap: 2px; height: 60px; border-bottom: 1px solid var(--line); }
+.leak-bars i { flex: 1; min-width: 0; background: var(--blue-soft); position: relative; display: flex; align-items: flex-end; border-radius: 2px 2px 0 0; }
+.leak-bars i b { display: block; width: 100%; background: var(--amber); border-radius: 2px 2px 0 0; }

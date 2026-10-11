@@ -173,3 +173,13 @@ How the v2 build was made: what the AI (Claude Code) did, which decisions came f
 - **From the spec (Praveen):** the 14 beats, the bottom-left move.
 - **Differs:** the captions show engine values: ₹730 (ALPHA10) → ₹473 (day 20) → ₹450 (plan v2), where the spec has ₹746 → ₹473 → ₹442.
 - **Time:** ~35 min.
+
+## Phase 10 — Leak radar (stretch) (11 Oct 2026)
+
+- **AI did:**
+  - `src/engine/leakRadar.ts` takes ALPHA10's real uses from last month's generated checkouts and adds seeded, synthetic referrers (deal channels rise after a listing on 8 Sep). Alert rule: 7-day deal-channel share above 15%, or first-time uses at 1.5× their earlier level.
+  - `LeakRadar` card on Offers & Coupons: daily bars with the deal-channel share, and "Switch to unique single-use codes" (simulated, logged).
+  - 1 test.
+- **From the spec (Praveen):** the signals, the action, the ALPHA10 example.
+- **Decided:** built because there was time; it stays behind `leakRadar` (on) and can be switched off in one line. The referrer field is labelled synthetic on the card.
+- **Time:** ~20 min.
