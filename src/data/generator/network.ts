@@ -176,3 +176,84 @@ export function generateNetwork(): NetworkMerchant[] {
 }
 
 export const roundToHalf = (x: number): number => roundHalfEven(x * 2) / 2;
+
+// ---------- Store economics (v3: benchmarks by store size) ----------
+/**
+ * What each synthetic store chose when it set up checkout offers: its own numbers, not Alpha's.
+ * Generated in a SEPARATE seeded pass so the offer-test data above (and every lift prior) is unchanged.
+ * Calibration (documented, like the lift re-centring above): within each category × sales band the
+ * median "keep per ₹1,000" is re-centred to ₹500 for apparel and the median offer spend to 3.65% of
+ * sales, so a store of Alpha's size sees typical values equal to the demo's starting values.
+ */
+export type StoreEconomics = {
+  id: string;
+  category: Category;
+  monthlySalesInr: number;
+  /** What the store keeps from a ₹1,000 sale after product, shipping, packaging and payment costs. */
+  keepPer1000: number;
+  /** Monthly checkout-offer budget as % of monthly sales. */
+  offerSpendPct: number;
+  /** Minimum return asked of an offer, as a multiple of break-even (1 = break-even). */
+  floorMultiple: 1 | 1.2 | 1.5;
+  goal: 'most_profit' | 'new_customers' | 'orders_steady';
+  maxDiscountInr: number;
+  menu: { free_shipping: boolean; flat_100: boolean; flat_200: boolean };
+  /** Share of planned profit given up for growth (stores whose goal is new customers or steady orders). */
+  growthGiveUpPct: number;
+  /** Pauses offers on new full-price drops. */
+  pausesOnDrops: boolean;
+};
+
+export const SALES_BANDS: { id: string; label: string; lo: number; hi: number }[] = [
+  { id: 'lt10', label: 'under ₹10 lakh', lo: 0, hi: 1_000_000 },
+  { id: '10to20', label: '₹10–20 lakh', lo: 1_000_000, hi: 2_000_000 },
+  { id: '20to35', label: '₹20–35 lakh', lo: 2_000_000, hi: 3_500_000 },
+  { id: '35plus', label: '₹35 lakh+', lo: 3_500_000, hi: Infinity },
+];
+export const bandOf = (sales: number) => SALES_BANDS.find((b) => sales >= b.lo && sales < b.hi) ?? SALES_BANDS[SALES_BANDS.length - 1];
+
+const KEEP_MEAN: Record<Category, number> = { fashion_apparel: 500, beauty: 560, footwear: 470, accessories_jewellery: 580, home: 450 };
+const ECON_SEED = NETWORK_SEED + 7;
+const CALIBRATION = { keepMedianApparel: 500, spendPctMedian: 3.65 };
+
+let econCache: StoreEconomics[] | null = null;
+
+export function storeEconomics(): StoreEconomics[] {
+  if (econCache) return econCache;
+  const r = mulberry32(ECON_SEED);
+  const ms = [...generateNetwork()].sort((a, b) => (a.id < b.id ? -1 : 1));
+  const out: StoreEconomics[] = ms.map((m) => {
+    const young = m.ageMonths <= 12;
+    const goalX = r();
+    const goal = goalX < (young ? 0.42 : 0.6) ? 'most_profit' : goalX < (young ? 0.86 : 0.88) ? 'new_customers' : 'orders_steady';
+    const fx = r();
+    return {
+      id: m.id, category: m.category, monthlySalesInr: m.monthlySalesInr,
+      keepPer1000: Math.round(Math.min(720, Math.max(240, normal(r, KEEP_MEAN[m.category], 75)))),
+      // Bigger stores spend a slightly smaller share; always-on welcome codes spend more.
+      offerSpendPct: Math.min(9, Math.max(0.8, Math.exp(normal(r, Math.log(3.6), 0.38)) * (m.couponStyle === 'always_on_welcome' ? 1.1 : 0.95) * (m.monthlySalesInr > 3_500_000 ? 0.9 : 1))),
+      floorMultiple: fx < 0.68 ? 1 : fx < 0.9 ? 1.2 : 1.5,
+      goal,
+      maxDiscountInr: pick(r, [150, 200, 200, 250, 250, 250, 250, 300]),
+      menu: { free_shipping: r() < 0.86, flat_100: r() < 0.74, flat_200: r() < (m.aovInr >= 1500 ? 0.7 : 0.4) },
+      growthGiveUpPct: goal === 'most_profit' ? 0 : Math.round(Math.min(40, Math.max(5, normal(r, 18, 7)))),
+      pausesOnDrops: r() < 0.62,
+    };
+  });
+  // Re-centre each category × band: apparel keep median → ₹500, offer spend median → 3.65% of sales.
+  for (const b of SALES_BANDS) {
+    for (const cat of Object.keys(KEEP_MEAN) as Category[]) {
+      const xs = out.filter((e) => e.category === cat && bandOf(e.monthlySalesInr).id === b.id);
+      if (!xs.length) continue;
+      const med = (v: number[]) => { const s = [...v].sort((p, q) => p - q); return s[Math.floor((s.length - 1) / 2)]; };
+      const sp = med(xs.map((e) => e.offerSpendPct));
+      for (const e of xs) e.offerSpendPct = Math.max(0.5, e.offerSpendPct + (CALIBRATION.spendPctMedian - sp));
+      if (cat === 'fashion_apparel') {
+        const k = med(xs.map((e) => e.keepPer1000));
+        for (const e of xs) e.keepPer1000 = Math.round(e.keepPer1000 + (CALIBRATION.keepMedianApparel - k));
+      }
+    }
+  }
+  econCache = out;
+  return out;
+}

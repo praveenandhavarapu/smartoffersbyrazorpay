@@ -18,7 +18,15 @@ export type PlanSettings = {
   allowedOffers?: readonly OfferId[];
   maxDiscountInr?: number;
   overrides?: Partial<Record<GroupId, OfferId>>;
+  /**
+   * v3 growth trade-off: give up up to `giveUpInr` of monthly profit (vs the plan without it) for more
+   * new customers or orders. Upgrades go to the best extra customers per rupee of profit lost, within budget.
+   */
+  growth?: GrowthSetting | null;
 };
+
+export type GrowthMetric = 'new_customers' | 'orders';
+export type GrowthSetting = { metric: GrowthMetric; giveUpInr: number };
 
 export const DEFAULT_SETTINGS: PlanSettings = {
   budget: 100000,
@@ -58,7 +66,7 @@ export type PlanResult = {
   settings: PlanSettings;
 };
 
-type Opt = { offer: OfferId; e: Econ };
+export type Opt = { offer: OfferId; e: Econ };
 
 /** Store-level order counts shared by every scenario. */
 export function storeOrders(groups: GroupStats[]) {
@@ -134,6 +142,13 @@ export function buildPlan(groups: GroupStats[], settings: Partial<PlanSettings> 
     }
   }
 
+  if (s.growth && s.growth.giveUpInr > 0) {
+    const steps = growthSteps(groups, s, choice, coverage, s.growth.metric);
+    const within = steps.filter((x) => x.giveUp <= s.growth!.giveUpInr + 1e-6);
+    const last = within[within.length - 1];
+    if (last) for (const [gid, o] of last.choice) choice.set(gid, o);
+  }
+
   // Merchant overrides win (shown with their cost); they are not re-optimised.
   const overridden = new Set<GroupId>();
   for (const g of groups) {
@@ -144,6 +159,45 @@ export function buildPlan(groups: GroupStats[], settings: Partial<PlanSettings> 
     }
   }
   return assemble(groups, choice, s, coverage, overridden, infeasible);
+}
+
+/** One step of the growth frontier: the plan after this upgrade (cumulative from the starting plan). */
+export type GrowthStep = { choice: Map<GroupId, Opt>; giveUp: number; gained: number; change: { group: GroupId; from: OfferId; to: OfferId } };
+
+/**
+ * Greedy growth frontier from a starting choice: each step moves one group to the offer that adds the most
+ * new customers (or orders) per rupee of profit lost, within the budget and max discount. A merchant-set
+ * minimum return (floorReturn) still applies; break-even does not (the profit given up is the point).
+ */
+export function growthSteps(groups: GroupStats[], s: PlanSettings, start: Map<GroupId, Opt>, coverage: number, metric: GrowthMetric): GrowthStep[] {
+  const choice = new Map(start);
+  const counts = (g: GroupStats) => metric === 'orders' || NEW_GROUPS.includes(g.id);
+  const opts = new Map(groups.map((g) => [g.id, optsFor(g, s, s.floorReturn ?? -Infinity)]));
+  const spend = () => groups.reduce((a, g) => a + g.checkouts * coverage * choice.get(g.id)!.e.spend, 0);
+  const profit = () => groups.reduce((a, g) => a + g.checkouts * coverage * choice.get(g.id)!.e.profit, 0);
+  const metricOf = () => groups.reduce((a, g) => a + (counts(g) ? g.checkouts * coverage * choice.get(g.id)!.e.lift : 0), 0);
+  const p0 = profit(), m0 = metricOf();
+  const out: GrowthStep[] = [];
+  for (let guard = 0; guard < 40; guard++) {
+    let best: { k: number; g: GroupStats; o: Opt } | null = null;
+    for (const g of groups) {
+      if (!counts(g)) continue;
+      const cur = choice.get(g.id)!;
+      for (const o2 of opts.get(g.id)!) {
+        const gained = (o2.e.lift - cur.e.lift) * g.checkouts * coverage;
+        if (gained <= 1e-9) continue;
+        if (spend() + (o2.e.spend - cur.e.spend) * g.checkouts * coverage > s.budget + 1e-6) continue;
+        const lost = (cur.e.profit - o2.e.profit) * g.checkouts * coverage;
+        const k = lost <= 1e-9 ? Infinity : gained / lost;
+        if (!best || k > best.k + 1e-12) best = { k, g, o: o2 };
+      }
+    }
+    if (!best) break;
+    const from = choice.get(best.g.id)!.offer;
+    choice.set(best.g.id, best.o);
+    out.push({ choice: new Map(choice), giveUp: Math.max(0, p0 - profit()), gained: metricOf() - m0, change: { group: best.g.id, from, to: best.o.offer } });
+  }
+  return out;
 }
 
 function ordersChange(groups: GroupStats[], extraOrders: number): { orders: number; pct: number } {

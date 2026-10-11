@@ -1,12 +1,11 @@
 import { useCallback } from 'react';
 import { useModel } from '../state/ModelContext';
 import { useStore } from '../state/store';
-import { route, FOLLOW_UPS, type RayCard, type QuickReply } from './demoRouter';
+import { FOLLOW_UPS, type RayCard, type QuickReply } from './demoRouter';
 import { askLive } from './liveClient';
 import { useChat } from './chatStore';
-import { question, parseAnswer, SETUP_ORDER } from './setupFlow';
-import { T } from './templates';
-import { tools, type Draft, type RayCtx, type ToolCall } from './tools';
+import { type Draft, type RayCtx, type ToolCall } from './tools';
+import { converse } from './converse';
 import { ledgerView } from '../data/ledgerQueries';
 import { FEATURES } from '../config/features';
 
@@ -55,42 +54,17 @@ export function useRay() {
     const ctx: RayCtx = { model, derived, settings: st.settings, approved: st.approved, killed: st.killed, ledger: ledgerView(st.moment, st.instantSettlements), settlementMode: st.settlementMode, instant: st.instantSettlements, day: st.snapshot, reviewDecisions: st.reviewDecisions };
     const rayMode = st.rayMode;
     chat.push({ role: 'user', text });
-    const festive = model.profile.upcomingDrop.name;
 
-    // Guided setup.
-    if (chat.setup) {
-      if (/^(cancel|stop|exit|quit)\b/i.test(text.trim())) { chat.setSetup(null); chat.push({ role: 'ray', text: 'Setup cancelled. Nothing changed.', via: 'setup' }); return; }
-      const step = chat.setup;
-      const a = parseAnswer(step, text);
-      if (!a.ok) { const q = question(step, festive); chat.push({ role: 'ray', text: a.hint, quick: q.quick, via: 'setup' }); return; }
-      useStore.getState().setSettings(a.patch);
-      const next = SETUP_ORDER[SETUP_ORDER.indexOf(step) + 1];
-      if (next) {
-        const q = question(next, festive);
-        chat.setSetup(next);
-        chat.push({ role: 'ray', text: (a.note ? a.note + '\n\n' : '') + q.text, quick: q.quick, via: 'setup' });
-        return;
-      }
-      chat.setSetup(null);
-      const s = tools.simulate_plan({ ...ctx, settings: useStore.getState().settings }, {});
-      chat.push({ role: 'ray', text: T.plan(s), cards: [{ kind: 'plan_live' }], quick: FOLLOW_UPS.plan, via: 'setup' });
-      return;
-    }
-
-    const local = route(text, ctx);
-    if (local.startSetup) {
-      const q = question('budget', festive);
-      chat.setSetup('budget');
-      chat.push({ role: 'ray', text: `${local.text}\n\n${q.text}`, quick: q.quick, via: 'setup' });
-      return;
-    }
+    const turn = converse(text, ctx, { setup: chat.setup });
+    if (turn.patch) useStore.getState().setSettings(turn.patch);
+    chat.setSetup(turn.setup);
     const logDraft = useStore.getState().logDraft;
     const answerLocally = (note?: string) => {
-      if (local.card?.kind === 'draft') logDraft(draftSummary(local.card.draft));
-      chat.push({ role: 'ray', text: local.text, cards: local.card ? [local.card] : undefined, quick: local.quick, refused: local.refused, via: 'demo', note });
+      if (turn.reply?.card?.kind === 'draft') logDraft(draftSummary(turn.reply.card.draft));
+      for (const m of turn.messages) chat.push(note ? { ...m, note } : m);
     };
     const h = chat.health;
-    if (local.refused || rayMode === 'demo') return answerLocally();
+    if (!turn.liveEligible || rayMode === 'demo') return answerLocally();
     if (h.state !== 'ready') return answerLocally(h.state === 'off' ? `Live mode unavailable: ${h.reason} Answered in Demo mode.` : undefined);
 
     chat.setBusy(true);
