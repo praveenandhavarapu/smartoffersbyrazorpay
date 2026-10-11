@@ -183,3 +183,12 @@ How the v2 build was made: what the AI (Claude Code) did, which decisions came f
 - **From the spec (Praveen):** the signals, the action, the ALPHA10 example.
 - **Decided:** built because there was time; it stays behind `leakRadar` (on) and can be switched off in one line. The referrer field is labelled synthetic on the card.
 - **Time:** ~20 min.
+
+## QA pass (11 Oct 2026)
+
+- **AI did:**
+  - Tests: checkout latency (§15.10) and all 24 routes and tabs before and after go-live (§15.11). 192 tests total.
+  - Browser sweep: 24 routes × 3 states × 2 widths plus every day toggle, 164 checks with 0 issues.
+  - Browser checks of Undo, Approve/Discard, the promotion and the tour.
+  - `docs/V2_QA.md` maps every §15 item to its evidence and leaves two manual items for Praveen: Ray Live on the deployed site, and the Netlify badge and phone run.
+- **Not verified here:** Ray Live (needs the deployed function and key) and how the Netlify badge renders.
