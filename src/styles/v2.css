@@ -106,3 +106,8 @@
 /* Phase 8: About */
 .about-v2 a { color: var(--blue); }
 .about-v2 .pos-line { border-left: 3px solid var(--blue); padding-left: 10px; }
+/* Phase 9: demo controls bottom-left, clear of the Netlify badge (bottom-right). */
+.concept-bar.v2 .cb-btn.primary, .concept-bar.v2 > button.cb-btn { order: -1; }
+.concept-bar.v2 { padding-right: 150px; }
+.demo-bar.left { left: 12px; transform: none; width: min(720px, calc(100% - 24px - 150px)); }
+@media (max-width: 720px) { .concept-bar.v2 { padding-right: 14px; } .demo-bar.left { width: calc(100% - 24px); } }

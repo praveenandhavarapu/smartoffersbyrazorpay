@@ -160,3 +160,16 @@ How the v2 build was made: what the AI (Claude Code) did, which decisions came f
 - **From the spec (Praveen):** all section content and links (paraphrased as given).
 - **Assumed:** the links were provided in the spec. They were not re-fetched from this environment (network policy), so they are shown as given.
 - **Time:** ~20 min.
+
+## Phase 9 — Demo tour v2 (11 Oct 2026)
+
+- **AI did:**
+  - `src/ui/components/tourV2.ts`: 14 steps (≈ 87 s). Every caption is a function of the engine state at the moment it shows, and the tour ends on an outcome.
+  - Flow: Home → Ray signals → Why AI (same budget) → setup with the playbook Why? → approve with the experiment space → checkout (Priya / Neha) → day 20 hero → Now strip → Experiments → decisions served → Week 3 promotion approved → day 30 keep → Impact trend → kill switch and resume.
+  - The v1 steps stay in `DemoPlayer.tsx` behind the flag.
+  - Play demo and Reset moved to the bottom-left of the concept bar; the player sits bottom-left too, clear of the Netlify badge (bottom-right).
+  - Tests: storage blocked still renders, Reset returns to defaults, tour shape.
+  - Browser run: all 14 steps from a fresh profile, no console errors, no horizontal scroll at 390 px.
+- **From the spec (Praveen):** the 14 beats, the bottom-left move.
+- **Differs:** the captions show engine values: ₹730 (ALPHA10) → ₹473 (day 20) → ₹450 (plan v2), where the spec has ₹746 → ₹473 → ₹442.
+- **Time:** ~35 min.

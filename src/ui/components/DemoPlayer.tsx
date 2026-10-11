@@ -6,9 +6,12 @@ import { useRay } from '../../ray/useRay';
 import { useDemo } from './demoStore';
 import { Pause, Play } from './Icons';
 import { DEFAULT_KEEP_PER_1000 } from '../../engine/net';
+import { FEATURES } from '../../config/features';
+import { useModel } from '../../state/ModelContext';
+import { tourV2Steps, type TourStep } from './tourV2';
 
 type Step = { route: string; caption: string; run?: () => void | Promise<void> };
-const STEP_MS = 5800; // 15 steps ≈ 87 s
+const STEP_MS = FEATURES.tourV2 ? 6200 : 5800; // v1: 15 steps ≈ 87 s; v2: 14 steps ≈ 87 s
 const scrollTo = (sel: string) => setTimeout(() => document.querySelector(sel)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200);
 
 /**
@@ -21,8 +24,9 @@ export function DemoPlayer() {
   const ask = useRay();
   const { open, playing, step, setStep, setPlaying, close, setShopper, closeOverride } = useDemo();
   const savedMode = useRef<'live' | 'demo' | null>(null);
+  const { model, derived } = useModel();
 
-  const steps: Step[] = useMemo(() => [
+  const v1Steps: Step[] = useMemo(() => [
     { route: '/', caption: 'The payments dashboard. Ray has spotted something: see the insight and the bell' },
     { route: '/ray', caption: 'Ask Ray "Anything I should fix?": the signals behind it, each against a threshold', run: () => { useChat.getState().clear(); return ask('Anything I should fix?'); } },
     { route: '/ray', caption: 'Why AI, not a rule: same shoppers, three options, and what a rule can\'t do', run: () => ask('Why AI, not a simple rule?') },
@@ -39,6 +43,9 @@ export function DemoPlayer() {
     { route: '/offers/smart', caption: 'Keep Smart Offers: billed 1% of proven extra sales only', run: () => { const p = useStore.getState(); p.decidePilot('keep', 'Kept Smart Offers after the pilot'); scrollTo('.decision'); } },
     { route: '/studio/smart-offers?tab=impact', caption: 'Impact: one north-star metric, the outcomes behind it, and the guardrails that must not get worse' },
   ], [ask, setShopper]);
+  const v2Steps: TourStep[] = useMemo(() => tourV2Steps({ ask, setShopper }), [ask, setShopper]);
+  const steps: (Step | TourStep)[] = FEATURES.tourV2 ? v2Steps : v1Steps;
+  const captionOf = (s: Step | TourStep) => (typeof s.caption === 'function' ? s.caption(derived, model) : s.caption);
 
   const goTo = useCallback(async (target: number, replay: boolean) => {
     const t = Math.max(0, Math.min(steps.length - 1, target));
@@ -73,8 +80,8 @@ export function DemoPlayer() {
 
   if (!open) return null;
   return (
-    <div className="demo-bar" role="region" aria-label="Demo player">
-      <div className="demo-cap"><span className="mono-tag">Step {step + 1} / {steps.length}</span> {steps[step].caption}</div>
+    <div className={`demo-bar ${FEATURES.tourV2 ? 'left' : ''}`} role="region" aria-label="Demo player">
+      <div className="demo-cap"><span className="mono-tag">Step {step + 1} / {steps.length}</span> {captionOf(steps[step])}</div>
       <div className="demo-ctl">
         <button className="btn secondary sm" onClick={() => void goTo(step - 1, true)} disabled={step === 0}>Back</button>
         <button className="btn secondary sm" onClick={() => setPlaying(!playing)} aria-label={playing ? 'Pause' : 'Play'}>{playing ? <Pause width={14} /> : <Play width={14} />}{playing ? 'Pause' : 'Play'}</button>
