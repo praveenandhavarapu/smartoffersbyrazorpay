@@ -11,6 +11,7 @@ import { playbookFor } from '../data/network/playbook';
 import { PILOT_START, pilotDayDate, toUnix } from '../lib/dates';
 import { TRUST_K, type ArmCounts } from './measure';
 import { roundHalfEven } from '../lib/format';
+import { prepaidShareWithNudge, rtoSavedPer100 } from './paymentAware';
 
 export const TRAFFIC_SHARE = 0.15;
 /** Same 14-day rule as the weekly review: no verdict on a test before two weeks of data. */
@@ -35,8 +36,9 @@ export const LEARNING_DAYS = {
 } as const;
 
 /** Decision keys stored in state (merchant approvals) and event ids. */
-export const KEYS = { startBig: 'evt-start-big-150', organicTest: 'exp-org-999', promoteBig: 'promote-big-150' } as const;
+export const KEYS = { startBig: 'evt-start-big-150', organicTest: 'exp-org-999', promoteBig: 'promote-big-150', prepaidTest: 'exp-prepaid-small' } as const;
 
+const PREPAID_LIFT_RATIO = (playbookFor('new_ads_small', 'free_shipping_prepaid')?.medianLiftPp ?? 0) / (playbookFor('new_ads_small', 'free_shipping')?.medianLiftPp ?? 1);
 const ORGANIC_LIFT_RATIO = (playbookFor('new_organic', 'free_shipping_999')?.medianLiftPp ?? 0) / (playbookFor('new_organic', 'free_shipping')?.medianLiftPp ?? 1);
 /** Synthetic truths for this store (like PILOT_TRUTH): what the challengers and drift really do. */
 export const LEARNING_TRUTH = {
@@ -53,6 +55,10 @@ export type LearningInput = {
   undone: string[];
   /** Pilot day "today" (0 before go-live). */
   nowDay: number;
+  /** Pilot day each merchant decision was made (for tests the merchant starts themselves). */
+  decidedOn?: Record<string, number>;
+  /** v2 §10 flag: payment-aware challenger available. */
+  paymentAware?: boolean;
 };
 
 export type Segment = { from: number; to: number; offer: OfferId; share: number; liftPp: number };
@@ -67,10 +73,13 @@ export function buyerShareAtLeast(group: GroupId, minInr: number): number {
 
 export function flags(i: LearningInput) {
   const bigRunning = i.approved && i.experimentSpace && !i.undone.includes(KEYS.startBig);
+  const prepaid = i.approved && i.paymentAware ? i.decisions[KEYS.prepaidTest] ?? null : null;
   return {
     bigRunning,
     promoteBig: bigRunning ? i.decisions[KEYS.promoteBig] ?? null : null,
     organic: i.approved ? i.decisions[KEYS.organicTest] ?? null : null,
+    prepaid,
+    prepaidStart: prepaid === 'approved' ? Math.max(1, (i.decidedOn?.[KEYS.prepaidTest] ?? 0) + 1) : null,
   };
 }
 
@@ -96,6 +105,14 @@ export function segmentsFor(g: GroupStats, i: LearningInput): Segment[] {
       { from: D.startOrganic, to: D.promoteOrganic - 1, offer: 'free_shipping_999', share: TRAFFIC_SHARE, liftPp: Lx },
       // Projection: assumes you approve the week-6 promotion the test is on course for.
       { from: D.promoteOrganic, to: INF, offer: 'free_shipping_999', share: 1, liftPp: Lx },
+    ];
+  }
+  if (g.id === 'new_ads_small' && f.prepaid === 'approved' && f.prepaidStart !== null) {
+    const Lx = L * PREPAID_LIFT_RATIO;
+    return [
+      ...(f.prepaidStart > 1 ? [{ from: 1, to: f.prepaidStart - 1, offer: champ, share: 1, liftPp: L }] : []),
+      { from: f.prepaidStart, to: INF, offer: champ, share: 1 - TRAFFIC_SHARE, liftPp: L },
+      { from: f.prepaidStart, to: INF, offer: 'free_shipping_prepaid', share: TRAFFIC_SHARE, liftPp: Lx },
     ];
   }
   if (g.id === 'lapsed') {
@@ -208,6 +225,8 @@ export type ExperimentRow = {
   trafficShare: number; startedOn: string | null; status: 'running' | 'promoted' | 'retired' | 'paused' | 'waiting' | 'proposed' | 'none';
   source: 'agent' | 'playbook' | 'merchant'; daysRunning: number; daysToDecision: number | null; decisionDate: string | null; lastRefreshed: string | null;
   read: ExperimentRead | null; mode: ReturnType<typeof evidenceMode>;
+  /** Payment-aware tests: failed deliveries avoided per 100 orders, per arm. */
+  rto?: { champion: number; challenger: number };
 };
 
 export type Trigger = { id: string; label: string; fired: boolean; day: number | null; date: string | null; projected: boolean; detail: string };
@@ -232,7 +251,8 @@ export function buildLearning(groups: GroupStats[], i: LearningInput, margin: nu
   const D = LEARNING_DAYS;
   const f = flags(i);
   const share999 = buyerShareAtLeast('new_organic', 999);
-  const withCost = groups.map((g) => (g.id === 'new_organic' ? { ...g, costShare: { ...(g.costShare ?? {}), free_shipping_999: share999 } } : g));
+  const withCost = groups.map((g) => (g.id === 'new_organic' ? { ...g, costShare: { ...(g.costShare ?? {}), free_shipping_999: share999 } }
+    : g.id === 'new_ads_small' ? { ...g, costShare: { ...(g.costShare ?? {}), free_shipping_prepaid: prepaidShareWithNudge('new_ads_small') } } : g));
   const G = (id: GroupId) => withCost.find((g) => g.id === id)!;
   const segments = Object.fromEntries(withCost.map((g) => [g.id, segmentsFor(g, i)])) as Record<GroupId, Segment[]>;
 
@@ -342,6 +362,17 @@ export function buildLearning(groups: GroupStats[], i: LearningInput, margin: nu
       }
       if (f.organic === 'declined') return { ...base, id: KEYS.organicTest, challenger: null, reason: 'You declined the playbook suggestion.', status: 'none', source: 'playbook' };
       return { ...base, id: KEYS.organicTest, challenger: now >= D.suggestOrganic ? 'free_shipping_999' : null, reason: now >= D.suggestOrganic ? 'Waiting on you: not on your menu yet.' : 'Playbook suggestion due at the week 2 review.', status: now >= D.suggestOrganic ? 'proposed' : 'none', source: 'playbook' };
+    }
+    if (gid === 'new_ads_small' && i.approved && i.paymentAware && f.prepaid) {
+      if (f.prepaid === 'declined') return { ...base, id: KEYS.prepaidTest, challenger: null, reason: 'You declined the prepaid-only test.', status: 'none' as const, source: 'merchant' as const };
+      const start = f.prepaidStart!;
+      const L = truthLift('new_ads_small');
+      const read = now > start ? readExperiment(g, 'free_shipping', 'free_shipping_prepaid', L, L * PREPAID_LIFT_RATIO, start, now - 1, margin, kept) : null;
+      return {
+        ...base, id: KEYS.prepaidTest, challenger: 'free_shipping_prepaid' as OfferId, source: 'merchant' as const, trafficShare: TRAFFIC_SHARE, startedOn: fmt(start),
+        status: now >= start ? 'running' as const : 'proposed' as const, daysRunning: Math.max(0, now - start + 1), daysToDecision: Math.max(0, start + MIN_TEST_DAYS - Math.max(now, start)), decisionDate: fmt(start + MIN_TEST_DAYS), lastRefreshed: now >= 1 ? fmt(now) : null, read,
+        rto: { champion: rtoSavedPer100('new_ads_small', false), challenger: rtoSavedPer100('new_ads_small', true) },
+      };
     }
     const reason = champ === 'none'
       ? (gid === 'returning' ? 'None: no cash offer pays back for loyal buyers. A non-cash perk would need your OK.' : 'None: creator codes keep running as they are.')

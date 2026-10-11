@@ -4,7 +4,7 @@
  */
 import { create } from 'zustand';
 import type { Goal, GroupId, OfferId } from '../data/types';
-import { DEMO_DATES, type Moment } from '../lib/dates';
+import { DEMO_DATES, MOMENT_DAY, type Moment } from '../lib/dates';
 import { makeEntry, type Actor, type AuditEntry } from './audit';
 import type { InstantSettlement } from '../data/ledgerQueries';
 import { FEATURES } from '../config/features';
@@ -56,6 +56,8 @@ type Persisted = {
   experimentSpace: boolean;
   /** v2 §7: merchant decisions on the learning loop (playbook suggestions, promotions). */
   learningDecisions: Record<string, 'approved' | 'declined'>;
+  /** Pilot day each learning decision was made. */
+  learningDecidedOn: Record<string, number>;
   /** v2 §7.6: automatic agent steps the merchant undid (event ids). */
   undone: string[];
   /** v2 §8: share anonymised results to get the playbook (default on). */
@@ -105,7 +107,7 @@ export type AppState = Persisted & Ephemeral & Actions;
 const initial: Persisted = {
   settings: DEFAULT_USER_SETTINGS, approved: false, approvedSettings: null, approvedOn: null, overrides: {}, killed: false,
   moment: 'before', creatorFix: 'pending', creatorFixedOn: null, rayMode: 'live', settlementMode: 't1', instantSettlements: [],
-  reviewDecisions: {}, reviewsOpened: [], notificationsRead: [], pilotDecision: null, alpha10Restored: false, experiments: {}, experimentSpace: true, learningDecisions: {}, undone: [], giveToGet: true, outageEvents: 0,
+  reviewDecisions: {}, reviewsOpened: [], notificationsRead: [], pilotDecision: null, alpha10Restored: false, experiments: {}, experimentSpace: true, learningDecisions: {}, learningDecidedOn: {}, undone: [], giveToGet: true, outageEvents: 0,
   audit: [],
 };
 
@@ -136,7 +138,7 @@ const pick = (s: AppState): Persisted => ({
   killed: s.killed, moment: s.moment, creatorFix: s.creatorFix, creatorFixedOn: s.creatorFixedOn, rayMode: s.rayMode, settlementMode: s.settlementMode,
   instantSettlements: s.instantSettlements, reviewDecisions: s.reviewDecisions, reviewsOpened: s.reviewsOpened,
   notificationsRead: s.notificationsRead, pilotDecision: s.pilotDecision, alpha10Restored: s.alpha10Restored,
-  experiments: s.experiments, experimentSpace: s.experimentSpace, learningDecisions: s.learningDecisions, undone: s.undone, giveToGet: s.giveToGet, outageEvents: s.outageEvents, audit: s.audit,
+  experiments: s.experiments, experimentSpace: s.experimentSpace, learningDecisions: s.learningDecisions, learningDecidedOn: s.learningDecidedOn, undone: s.undone, giveToGet: s.giveToGet, outageEvents: s.outageEvents, audit: s.audit,
 });
 
 export const describeSettings = (s: Settings) =>
@@ -202,7 +204,7 @@ export const useStore = create<AppState>((set, get) => {
       if (get().approved) log('Merchant (Praveen)', 'experiment', on ? 'Turned the experiment space on' : 'Turned the experiment space off: no new challengers', on ? 'off' : 'on', on ? 'on' : 'off');
     },
     decideLearning: (key, d, summary, impact) => {
-      set((st) => ({ learningDecisions: { ...st.learningDecisions, [key]: d } }));
+      set((st) => ({ learningDecisions: { ...st.learningDecisions, [key]: d }, learningDecidedOn: { ...st.learningDecidedOn, [key]: MOMENT_DAY[st.moment] } }));
       log('Merchant (Praveen)', 'experiment', `${d === 'approved' ? 'Approved' : 'Kept as is'}: ${summary}`, undefined, impact);
     },
     undoEvent: (id, summary) => {

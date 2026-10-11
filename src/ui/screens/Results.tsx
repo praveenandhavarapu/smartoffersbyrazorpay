@@ -21,6 +21,7 @@ import { ModeChip } from '../components/Experiments';
 import { WhyPlaybook } from '../components/Playbook';
 import { dayOf } from '../../engine/learning';
 import { HeroMetric } from '../components/HeroMetric';
+import { PrepaidInsight } from '../components/PrepaidInsight';
 
 export function Results() {
   const { model, derived } = useModel();
@@ -221,6 +222,7 @@ export function Results() {
           <span className="mono-tag">Offer groups</span>
           <p className="small">{offerRows.length} offer groups live · {offerRows.filter((r) => r.stillLearning).length} still learning · holdout {model.profile.holdoutPct}%</p>
         </div>
+        {FEATURES.paymentAware && <PrepaidInsight compact />}
       </aside>
       <OverrideDrawer />
     </div>

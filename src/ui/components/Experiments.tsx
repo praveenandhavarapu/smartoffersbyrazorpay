@@ -18,7 +18,7 @@ export function ModeChip({ mode, days }: { mode: 'proof' | 'playbook' | 'none'; 
     : <span className="status warn" title={`Runs on evidence from similar stores; your own proof expected by ~day ${days}`}>Playbook mode</span>;
 }
 
-function ReadCard({ title, read, rule }: { title: string; read: ExperimentRead; rule?: boolean }) {
+function ReadCard({ title, read, rule, rto }: { title: string; read: ExperimentRead; rule?: boolean; rto?: { champion: number; challenger: number } }) {
   const arm = (label: string, a: ExperimentRead['champion']) => (
     <tr>
       <td>{label}<span className="sub">{offerLabel(a.offer)} · {num(a.checkouts)} shoppers</span></td>
@@ -38,6 +38,7 @@ function ReadCard({ title, read, rule }: { title: string; read: ExperimentRead; 
         </table>
       </div>
       <p className="small"><b>{read.verdict === 'promote' ? 'On course to promote.' : read.verdict === 'retire' ? 'On course to retire.' : 'Keep testing.'}</b> {read.reason} Lift gap {pp(read.gapPp)} (90% range {num(read.gapLowPp, 1)} to {num(read.gapHighPp, 1)}), {num(read.spendCutPct)}% less spend per shopper, about {inrSigned(read.gainMonth)} a month.</p>
+      {rto && <p className="small">Failed deliveries avoided per 100 orders: champion {num(rto.champion, 1)}, challenger {num(rto.challenger, 1)} (shoppers moved from COD to prepaid). Not yet counted in profit above.</p>}
       {rule && <p className="small muted">Decision rule: promote only if the challenger costs less per shopper, makes at least as much profit per shopper once this store's result is blended with the playbook (trust = shoppers ÷ (shoppers + 300)), and this store's own lift gap is within noise. Promotions always need your approval.</p>}
     </div>
   );
@@ -55,6 +56,7 @@ export function ExperimentsTab() {
   const big = L.rows.find((r) => r.id === KEYS.startBig);
   const org = L.rows.find((r) => r.id === KEYS.organicTest && r.read);
   const decay = L.events.find((e) => e.type === 'lift_decay');
+  const pre = L.rows.find((r) => r.id === KEYS.prepaidTest && r.read);
   return (
     <div className="stack-gap exp-tab">
       <p className="exp-lead"><b>The experiment never stops: {model.profile.holdoutPct}% holdout always on, challengers refreshed weekly.</b> Champion = today's offer for the group. Challenger = a cheaper or better variant tested on {pctOf(TRAFFIC_SHARE, 0)} of the group's treated shoppers; the holdout is never used for tests.</p>
@@ -80,6 +82,7 @@ export function ExperimentsTab() {
       </div>
       {big?.read && <ReadCard title={`${offerLabel('flat_200')} vs ${offerLabel('flat_150')} · ${groupLabel('new_ads_big')}`} read={big.read} rule />}
       {org?.read && <ReadCard title={`${offerLabel('free_shipping')} vs ${offerLabel('free_shipping_999')} · ${groupLabel('new_organic')}`} read={org.read} />}
+      {pre?.read && <ReadCard title={`${offerLabel('free_shipping')} vs ${offerLabel('free_shipping_prepaid')} · ${groupLabel('new_ads_small')}`} read={pre.read} rto={pre.rto} />}
       {(big?.status === 'waiting' || L.rows.some((r) => r.status === 'proposed')) && <div><button className="btn primary sm" onClick={() => nav('/studio/smart-offers?tab=reviews')}>Decide in the weekly review →</button></div>}
       <div className="rcard">
         <div className="rc-h"><b>Re-test triggers</b><span className="muted small">any of these re-opens a group for testing</span></div>

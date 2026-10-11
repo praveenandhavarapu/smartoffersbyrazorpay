@@ -9,6 +9,7 @@ import { num, pctOf } from '../../lib/format';
 import { groupLabel } from '../../lib/labels';
 import { playbook, playbookFor, PEER_DEFINITION, PLAYBOOK_FOOTER, type PlaybookRow } from '../../data/network/playbook';
 import { KEYS } from '../../engine/learning';
+import { FEATURES } from '../../config/features';
 import type { GroupId, OfferId } from '../../data/types';
 
 const pp = (x: number) => `${x >= 0 ? '+' : ''}${num(x, 1)} pp`;
@@ -47,9 +48,10 @@ function AddChallenger({ row }: { row: PlaybookRow }) {
   const decide = useStore((s) => s.decideLearning);
   const approved = useStore((s) => s.approved);
   const [confirm, setConfirm] = useState(false);
-  const key = row.group === 'new_organic' && row.offer === 'free_shipping_999' ? KEYS.organicTest : `pb:${row.group}:${row.offer}`;
+  const key = row.group === 'new_organic' && row.offer === 'free_shipping_999' ? KEYS.organicTest
+    : FEATURES.paymentAware && row.group === 'new_ads_small' && row.offer === 'free_shipping_prepaid' ? KEYS.prepaidTest : `pb:${row.group}:${row.offer}`;
   const d = decisions[key];
-  if (d) return <span className={`status ${d === 'approved' ? 'ok' : ''}`}>{d === 'approved' ? (key === KEYS.organicTest ? 'running as challenger' : 'queued as next challenger') : 'not now'}</span>;
+  if (d) return <span className={`status ${d === 'approved' ? 'ok' : ''}`}>{d === 'approved' ? (key === KEYS.organicTest || key === KEYS.prepaidTest ? 'running as challenger' : 'queued as next challenger') : 'not now'}</span>;
   if (!approved) return <span className="muted small">after you approve a plan</span>;
   if (!row.inMenu && !confirm) return <button className="btn secondary sm" onClick={() => setConfirm(true)}>Add as challenger</button>;
   if (!row.inMenu) {

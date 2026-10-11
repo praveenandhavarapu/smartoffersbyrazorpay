@@ -7,6 +7,7 @@ import { Clover } from '../components/Icons';
 import { PageHeader } from '../components/kit';
 import { FEATURES } from '../../config/features';
 import { RETURN_LABEL } from '../../engine/net';
+import { PrepaidInsight } from '../components/PrepaidInsight';
 
 export function Offers() {
   const { derived } = useModel();
@@ -27,6 +28,7 @@ export function Offers() {
         </span>
         <span className="btn primary sm">{approved ? 'Open' : 'Set up'}</span>
       </button>
+      {FEATURES.paymentAware && <PrepaidInsight />}
       <section className="card">
         <div className="sec-h pad-x"><h3>Coupons</h3><span className="muted small">last month (22 Aug – 20 Sep)</span></div>
         <div className="tbl-wrap">

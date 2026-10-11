@@ -85,7 +85,10 @@ How AI tools were used, what they did, how they sped up the work, and where I ma
 
 - Phase 5 (flag `discountBrain`): Cart Abandonment asks Smart Offers before discounting; decisions-served section (KPIs, 20 rows, API contract), holdout on recovery decisions. Tests 147 passing; build passes.
 
+- Phase 6 (flag `paymentAware`): prepaid insight (computed), prepaid-only challenger for small ad carts with RTO saved, checkout UPI line. Tests 150 passing; build passes.
+
 <!-- Claude Code adds unclear spec points here with the option it chose. -->
+- v2 §10 defaults say COD fails 28%; the fixture says Alpha's failed-COD rate is 22% (and the 81% kept rate uses it). Chose: the fixture's 22% everywhere. At 22% a blanket ₹50 prepaid discount loses in all 6 groups; the insight copy is computed and says so.
 - v2 §7.2's decision rule ("challenger lower bound ≥ champion − tolerance") cannot promote with ~38 challenger shoppers. Chose: blend the store's result with the playbook (same trust weighting as the plan) and require cost lower, profit per shopper at least equal, and the store's lift gap within noise.
 - v2 §3.2 expects ALPHA10 ₹746 per extra order and ₹617 earned; the engine gives ₹730 (254.8 extra orders) and ₹614 (store AOV ₹1,516). Chose: keep the engine values and report them.
 - v2 Phase 3 needs "₹150 off", which is not in `fixtures/offers.json`. Chose: define it in code as a cheaper amount of the "₹ off" offer already on the menu (fixtures untouched).

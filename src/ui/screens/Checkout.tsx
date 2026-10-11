@@ -11,6 +11,7 @@ import { useDemo } from '../components/demoStore';
 import { RETURN_LABEL } from '../../engine/net';
 import { FEATURES } from '../../config/features';
 import { AI_NIGHTLY, TABLE_NAME } from '../components/HowAIWorks';
+import { PREPAID } from '../../engine/paymentAware';
 
 function CustomForm({ value, onChange }: { value: Shopper; onChange: (s: Shopper) => void }) {
   const cart = cartValue(value);
@@ -55,6 +56,7 @@ export function Checkout() {
 
   const g = model.groups.find((x) => x.id === d.group)!;
   const planOffer = derived.liveOffers[d.group];
+  const prepaidTest = derived.learning?.flags.prepaid === 'approved';
   const why = whyNumbers(g, planOffer, derived.margin, derived.kept);
   const shipping = d.offer.startsWith('free_shipping') ? 0 : d.shippingInr;
   const discount = d.offer.startsWith('flat_') ? d.savingInr : 0;
@@ -91,7 +93,10 @@ export function Checkout() {
                 <div className="mtop"><div className="mlogo">A</div><div><div className="mname">{model.profile.displayName}</div><div className="msub">{shopper.cart.length} item{shopper.cart.length > 1 ? 's' : ''}</div></div><div className="mtotal">{inr(total)}</div></div>
                 {failSafe && <div className="coupon-row small">Smart Offers unavailable — default checkout</div>}
                 {!failSafe && d.offer !== 'none' ? (
-                  <div className="obanner"><Tag />{OFFER_BY_ID[d.offer].label} applied<span>−{inr(d.savingInr)}</span></div>
+                  <>
+                    <div className="obanner"><Tag />{OFFER_BY_ID[d.offer].label} applied<span>−{inr(d.savingInr)}</span></div>
+                    {FEATURES.paymentAware && prepaidTest && d.group === 'new_ads_small' && <div className="pay-nudge">Challenger variant (15% of this group): <b>Free shipping when you pay by UPI</b><span className="small">COD-likely shopper: {pctOf(1 - PREPAID.share.new_ads_small[0], 0)} of this group pay on delivery</span></div>}
+                  </>
                 ) : (
                   <div className="coupon-row"><span>Have a coupon code?</span><b>View coupons</b></div>
                 )}

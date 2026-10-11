@@ -2,7 +2,7 @@
 import { AFTER_DELIVERY, PILOT_TRUTH, PROFILE } from '../data/fixtures';
 import { pilotCountsFromSessions } from '../data/aggregate';
 import { pilotCounts } from '../data/generator/alpha';
-import { DEMO_DATES, PILOT_START, addDays, fmtDate, pilotDayDate, toUnix, type Moment } from '../lib/dates';
+import { DEMO_DATES, MOMENT_DAY, PILOT_START, addDays, fmtDate, pilotDayDate, toUnix, type Moment } from '../lib/dates';
 import { buildReview, type WeeklyReview } from '../engine/review';
 import { inr } from '../lib/format';
 import { couponSignals, eligibility } from '../engine/opportunities';
@@ -36,6 +36,7 @@ export type DerivedInput = {
   settings: Settings; approved: boolean; approvedSettings: Settings | null; overrides: Partial<Record<GroupId, OfferId>>; killed: boolean;
   moment?: Moment; creatorFix?: 'pending' | 'limited' | 'kept'; creatorFixDate?: string | null;
   experimentSpace?: boolean; learningDecisions?: Record<string, 'approved' | 'declined'>; undone?: string[];
+  learningDecidedOn?: Record<string, number>;
 };
 
 /** Learning-loop items for a weekly review (the events that happen on that Monday). */
@@ -53,7 +54,7 @@ export const SNAP_DAYS = { day7: 7, day14: 14, day20: 20, day30: 30, day60: 60 }
 export type SnapKey = keyof typeof SNAP_DAYS;
 
 /** The demo day "today" for each moment (null before go-live). */
-export const NOW_DAY: Record<Moment, number> = { before: 0, day20: 20, day30: 30, day60: 60 };
+export const NOW_DAY: Record<Moment, number> = MOMENT_DAY;
 export const todaySnap = (m: Moment): SnapKey | null => (m === 'day20' ? 'day20' : m === 'day30' ? 'day30' : m === 'day60' ? 'day60' : null);
 
 /** Human diff between two settings objects ("Budget ₹1,00,000 → ₹50,000"). */
@@ -106,6 +107,7 @@ export function derive(m: Model, st: DerivedInput) {
   const learning = FEATURES.experiments ? buildLearning(g, {
     approved: st.approved, experimentSpace: st.experimentSpace ?? true, festiveWindow: liveSettings.festiveWindow,
     decisions: st.learningDecisions ?? {}, undone: st.undone ?? [], nowDay: NOW_DAY[moment0],
+    decidedOn: st.learningDecidedOn ?? {}, paymentAware: FEATURES.paymentAware,
   }, marginOf(liveSettings), kept, groupLabel) : null;
   const promoted = learning?.promotedOffers ?? [];
   const planGroups = learning?.groupsV2 ?? g;

@@ -8,7 +8,7 @@ export const FEATURES = {
   experiments: true, // Phase 3: Suggest → Test → Prove → Promote
   playbook: true, // Phase 4: "Stores like yours"
   discountBrain: true, // Phase 5: decisions served to other agents
-  paymentAware: false, // Phase 6: prepaid-only challenger + insight
+  paymentAware: true, // Phase 6: prepaid-only challenger + insight
   rayV2: false, // Phase 7: Ray reads one engine snapshot; drafts with diff
   aboutV2: false, // Phase 8: evidence and positioning on About
   tourV2: false, // Phase 9: 14-step demo tour, controls bottom-left

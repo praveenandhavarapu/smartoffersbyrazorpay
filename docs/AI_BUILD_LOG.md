@@ -115,3 +115,20 @@ How the v2 build was made: what the AI (Claude Code) did, which decisions came f
   - The recovery rates for the other three groups are illustrative and labelled as such: big carts 14→19%, creator 20→22%, organic 16→20%. The reachable share is 60%.
   - Neha's expected profit change is −₹26 per request, not the spec's −₹61. It is computed from the group AOV, the kept rate and the margin.
 - **Time:** ~35 min.
+
+## Phase 6 — Payment-aware offers (11 Oct 2026)
+
+- **AI did:**
+  - `src/engine/paymentAware.ts` implements the spec formula: value per switch, discount cost and net per group for a blanket ₹50 prepaid discount, plus failed deliveries avoided per 100 orders.
+  - The `PrepaidInsight` card on Offers & Coupons (full table) and in the Results sidebar (compact). Its headline is computed from the engine.
+  - "Free shipping, prepaid only" vs "Free shipping, any payment" for New · ads · under ₹1,500 is now a challenger. It starts from the insight card or the playbook, needs the merchant's OK and keeps one offer per order.
+  - The Experiments tab shows the conversion lift and failed deliveries avoided for both arms.
+  - The checkout preview shows "Free shipping when you pay by UPI" for that group while the test runs.
+  - 3 tests.
+- **From the spec (Praveen):** the insight, the formula and defaults (₹160 failed-delivery cost, 4% prepaid failures, half the sale recovered), the prepaid shares p0 → p1, the challenger, the checkout line.
+- **Assumed / decided:**
+  - The failed-COD rate is the store's own 22%, the same figure behind the 81% kept rate, not the spec's 28%.
+  - At 22% the blanket discount loses money in all 6 groups, so the card says so. The spec expected "pays only for small ad carts", which holds at 28%: the computation is kept honest and the copy follows it.
+  - The prepaid test starts the day after the merchant approves it, because it is merchant-initiated.
+  - Failed deliveries avoided are reported but not yet added to profit.
+- **Time:** ~40 min.

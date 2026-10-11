@@ -26,9 +26,10 @@ export function ModelProvider({ children }: { children: ReactNode }) {
   const experimentSpace = useStore((s) => s.experimentSpace);
   const learningDecisions = useStore((s) => s.learningDecisions);
   const undone = useStore((s) => s.undone);
+  const learningDecidedOn = useStore((s) => s.learningDecidedOn);
   const derived = useMemo(
-    () => (model ? derive(model, { settings, approved, approvedSettings, overrides, killed, moment, creatorFix, creatorFixDate, experimentSpace, learningDecisions, undone }) : null),
-    [model, settings, approved, approvedSettings, overrides, killed, moment, creatorFix, creatorFixDate, experimentSpace, learningDecisions, undone],
+    () => (model ? derive(model, { settings, approved, approvedSettings, overrides, killed, moment, creatorFix, creatorFixDate, experimentSpace, learningDecisions, undone, learningDecidedOn }) : null),
+    [model, settings, approved, approvedSettings, overrides, killed, moment, creatorFix, creatorFixDate, experimentSpace, learningDecisions, undone, learningDecidedOn],
   );
   if (error) {
     return (

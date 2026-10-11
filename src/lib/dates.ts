@@ -41,3 +41,6 @@ export function momentLabel(m: Moment): string {
   if (m === 'day30') return `${fmtDate(DEMO_DATES.day30)} · pilot day 30`;
   return `${fmtDate(DEMO_DATES.day60)} · pilot day 60`;
 }
+
+/** Pilot day for each demo moment (0 before go-live). */
+export const MOMENT_DAY: Record<Moment, number> = { before: 0, day20: 20, day30: 30, day60: 60 };
