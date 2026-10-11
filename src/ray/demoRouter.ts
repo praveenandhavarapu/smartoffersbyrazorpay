@@ -361,7 +361,8 @@ export function route(message: string, ctx: RayCtx): RayReply {
     if (ctx.killed && scope === 'all') return reply('pause_not_live', 'Smart Offers is already paused. Say "resume" when you want it back.', { next: { label: 'Resume', message: 'Resume Smart Offers' } });
     if (g && ctx.derived.liveOffers[g] === 'none') return reply('no_change', `${groupLabel(g)} already get no offer, so there's nothing to pause.`, { about: { group: g } });
     const d = call('request_pause', { scope }, () => tools.request_pause(ctx, { scope }));
-    return reply('pause_draft', T.pause(scope), { card: { kind: 'draft', draft: d.draft } });
+    if ('error' in d) return reply('help', T.help());
+    return reply('pause_draft', T.pause(scope === 'all' ? 'all' : groupLabel(scope)), { card: { kind: 'draft', draft: d.draft } });
   }
 
   // 11. Shopper explanations.

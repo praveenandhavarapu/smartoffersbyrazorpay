@@ -79,7 +79,7 @@ export const isGroupId = (x: unknown): x is GroupId => typeof x === 'string' && 
 export const isOfferId = (x: unknown): x is OfferId => typeof x === 'string' && (ALL_OFFER_IDS as readonly string[]).includes(x);
 
 function planSummary(ctx: RayCtx, p: PlanResult) {
-  const r = planRange(ctx.model.groups, p, ctx.model.pool.p25, ctx.model.pool.p75);
+  const r = planRange(ctx.derived.planGroups, p, ctx.model.pool.p25, ctx.model.pool.p75);
   const cpo = costPerExtraOrder(p.spend, p.extraOrders);
   return {
     return_basis: `${RETURN_LABEL}: ${roundHalfEven((p.settings.keptRate ?? 1) * 100)}% of extra sales kept after returns and failed COD`,
@@ -87,7 +87,7 @@ function planSummary(ctx: RayCtx, p: PlanResult) {
     rows: p.rows.map((x) => ({ group: x.group, label: x.label, offer: x.offer, offer_label: OFFER_BY_ID[x.offer].label, spend: M(x.spend), extra_sales: M(x.extraSales), extra_orders: O(x.extraOrders), return_x: R(x.ret), profit: M(x.profit), overridden: x.overridden })),
     spend: M(p.spend), budget: p.settings.budget, extra_sales: M(p.extraSales), extra_orders: O(p.extraOrders), return_x: R(p.ret),
     return_range: [R(r.retLow), R(r.retHigh)], profit: M(p.profit), profit_range: [M(r.profitLow), M(r.profitHigh)],
-    orders: M(p.orders), orders_change_pct: O(p.ordersChangePct), over_budget: p.overBudget,
+    orders: M(p.orders), orders_change_pct: O(p.ordersChangePct), orders_change_basis: `vs ${M(ctx.derived.storeOrders.today).toLocaleString('en-IN')} orders a month today (with ALPHA10); dropping offers that went to people who buy anyway lowers it`, over_budget: p.overBudget,
     infeasible: p.infeasible ? { best_change_pct: O(p.infeasible.bestChangePct), best_any_budget_pct: O(p.infeasible.bestAnyBudgetPct), raise_budget_to: p.infeasible.raiseBudgetTo ?? null } : null,
     margin_pct: roundHalfEven(p.settings.margin * 100, 1), break_even_x: R(1 / p.settings.margin),
     new_customers_month: M(newCustomers(ctx.derived.planGroups, p)),
@@ -103,7 +103,9 @@ export type SettingsArgs = {
 export type Draft =
   | { type: 'override'; group: GroupId; groupLabel: string; offer: OfferId; from: OfferId; spend: number; extraOrders: number; ret: number; profit: number;
       /** v2: change vs the group's current offer (spend saved, orders lost, profit change). */
-      vsNow?: { spend: number; extraOrders: number; profit: number } }
+      vsNow?: { spend: number; extraOrders: number; profit: number };
+      /** v3: the whole plan with this override (the budget is a hard stop). */
+      planAfter?: { spend: number; budget: number; over_budget: boolean; budget_needed: number | null; profit: number } }
   | { type: 'pause'; scope: 'all' | GroupId }
   | { type: 'resume' }
   | { type: 'settings'; patch: Partial<Settings>; summary: string };
@@ -203,8 +205,11 @@ export const tools = {
       allowedOffers: menu, overrides,
     }, buildPlan(ctx.derived.planGroups, base));
     const now = buildPlan(ctx.derived.planGroups, base);
+    const gaveUp = Math.max(0, now.profit - sim.profit);
+    const usedNote = a.budget !== undefined && sim.spend < a.budget * 0.97 ? ` (uses ₹${M(sim.spend).toLocaleString('en-IN')})` : '';
+    const giveNote = a.growth_give_up_inr && a.growth_give_up_inr > gaveUp + 1 ? ` (gives up ₹${M(gaveUp).toLocaleString('en-IN')})` : '';
     return {
-      scenario: scenarioName(a), ...planSummary(ctx, sim), vs_current_profit: M(sim.vsCurrent.profit), vs_alpha10_profit: M(sim.vsAlpha10.profit),
+      scenario: `${scenarioName(a)}${usedNote}${giveNote}`, ...planSummary(ctx, sim), vs_current_profit: M(sim.vsCurrent.profit), vs_alpha10_profit: M(sim.vsAlpha10.profit),
       vs_current_new_customers: M(newCustomers(ctx.derived.planGroups, sim) - newCustomers(ctx.derived.planGroups, now)),
       applied: false as const,
     };
@@ -212,13 +217,18 @@ export const tools = {
   get_current_plan(ctx: RayCtx) {
     return { status: ctx.killed ? 'paused (kill switch)' : ctx.approved ? 'approved' : 'draft', scenario: 'current plan', ...planSummary(ctx, ctx.approved ? ctx.derived.live : ctx.derived.draft) };
   },
-  draft_plan_change(ctx: RayCtx, a: { group_id: GroupId; offer_id: OfferId }): { draft: Draft; requires_approval: true } {
-    const from = ctx.derived.live.rows.find((r) => r.group === a.group_id)!.offer;
-    const m = ctx.derived.margin, k = ctx.derived.kept;
+  draft_plan_change(ctx: RayCtx, a: { group_id: GroupId; offer_id: OfferId }): { draft: Draft; requires_approval: true; plan_after: { spend: number; budget: number; over_budget: boolean; budget_needed: number | null; profit: number } } {
+    const cur = ctx.approved ? ctx.derived.live : ctx.derived.draft;
+    const from = cur.rows.find((r) => r.group === a.group_id)!.offer;
+    const m = ctx.approved ? ctx.derived.margin : ctx.derived.draftMargin, k = ctx.derived.kept;
     const c = overrideCost(ctx.derived.planGroups, a.group_id, a.offer_id, m, 0.9, k);
     const now = overrideCost(ctx.derived.planGroups, a.group_id, from, m, 0.9, k);
+    // The whole plan with this override: does it still fit the budget hard stop?
+    const keep = Object.fromEntries(cur.rows.filter((r) => r.overridden).map((r) => [r.group, r.offer])) as Partial<Record<GroupId, OfferId>>;
+    const after = buildPlan(ctx.derived.planGroups, ctx.derived.planSettingsFor(ctx.approved ? ctx.derived.liveSettings : ctx.settings, { ...keep, [a.group_id]: a.offer_id }));
+    const plan_after = { spend: M(after.spend), budget: after.settings.budget, over_budget: after.overBudget, budget_needed: after.overBudget ? Math.ceil(after.spend / 5000) * 5000 : null, profit: M(after.profit) };
     return { draft: { type: 'override', group: a.group_id, groupLabel: label(ctx.model, a.group_id), offer: a.offer_id, from, spend: M(c.spend), extraOrders: O(c.extraOrders), ret: R(c.ret), profit: M(c.profit),
-      vsNow: { spend: M(c.spend - now.spend), extraOrders: O(c.extraOrders - now.extraOrders), profit: M(c.profit - now.profit) } }, requires_approval: true };
+      vsNow: { spend: M(c.spend - now.spend), extraOrders: O(c.extraOrders - now.extraOrders), profit: M(c.profit - now.profit) }, planAfter: plan_after }, requires_approval: true, plan_after };
   },
   explain_group(ctx: RayCtx, a: { group_id: GroupId }) {
     const p = ctx.approved ? ctx.derived.live : ctx.derived.draft;
@@ -272,7 +282,7 @@ export const tools = {
   },
   get_pilot_decision(ctx: RayCtx) {
     const p = ctx.derived.pilot;
-    return { pilot_day: p.days, days_left: ctx.derived.daysLeft, expected_profit_month: M(p.expectedProfitMonth), extra_orders: O(p.extraOrders), proven_extra_orders_at_least: M(p.extraOrdersLow), return_x: R(p.ret), return_range: [R(p.retLow), R(p.retHigh)], fee: M(p.fee.fee), fee_rule: '1% of proven extra sales, capped at 20% of extra profit', verdict: p.verdict };
+    return { basis: ctx.derived.daysLeft > 0 ? `projection to pilot day ${p.days} (today is day ${ctx.derived.nowDay}); results so far are in get_results` : `measured at pilot day ${p.days}`, pilot_day: p.days, today_day: ctx.derived.nowDay, days_left: ctx.derived.daysLeft, expected_profit_month: M(p.expectedProfitMonth), extra_orders: O(p.extraOrders), proven_extra_orders_at_least: M(p.extraOrdersLow), return_x: R(p.ret), return_range: [R(p.retLow), R(p.retHigh)], fee: M(p.fee.fee), fee_rule: '1% of proven extra sales, capped at 20% of extra profit', verdict: p.verdict };
   },
   get_impact_summary(ctx: RayCtx) {
     const live = ctx.approved && ctx.derived.today !== null;
@@ -335,34 +345,38 @@ export const tools = {
     return {
       ok: true as const, peers: b.peerLabel, stores: b.stores, note: 'Synthetic network aggregates (20+ stores, no store above 25% of the sample). Typical values are suggestions, never assumed.',
       keep_per_1000: b.keepPer1000, monthly_budget: b.budgetInr, offer_spend_pct_of_sales: b.offerSpendPct, goal_mix_pct: b.goalMixPct,
-      offer_menu_pct: b.menuPct, max_discount: b.maxDiscountInr, min_return: { break_even_pct: b.floor.breakEvenPct, higher_pct: b.floor.higherPct, usual_higher: `${b.floor.usualHigherMultiple}× break-even`, break_even_x_at_your_margin: R(be) },
+      offer_menu_pct: b.menuPct, max_discount: b.maxDiscountInr, min_return: { break_even_pct: b.floor.breakEvenPct, higher_pct: b.floor.higherPct, usual_higher: `${b.floor.usualHigherMultiple}× break-even`, usual_higher_multiple_of_break_even: b.floor.usualHigherMultiple, usual_higher_x_at_your_margin: R(b.floor.usualHigherMultiple * be), break_even_x_at_your_margin: R(be) },
       pause_on_new_drops_pct: b.pausesOnDropsPct, growth_give_up_pct_of_profit: b.growthGiveUpPct,
       inputs, not_confirmed: pending.map((k) => INPUT_LABEL[k]),
+      from_your_data: { kept_after_returns_pct: M(ctx.derived.kept * 100), kept_basis: 'your last 90 days of returns and failed COD (read-only)', repeat: `${M(ctx.model.profile.repeat.rate * 100)}% of new customers reorder within 180 days at about ₹${M(ctx.model.profile.repeat.aovInr).toLocaleString('en-IN')} (your order history)` },
     };
   },
   get_tradeoffs(ctx: RayCtx, a: { metric?: GrowthMetric; give_up_inr?: number; extra_customers?: number; keep_per_1000?: number; view?: 'growth' | 'margin' } = {}) {
     const metric = a.metric ?? 'new_customers';
-    const base = ctx.derived.planSettingsFor({ ...ctx.settings, growth: null });
+    const base = ctx.derived.planSettingsFor({ ...ctx.settings, ...(a.keep_per_1000 !== undefined ? { keepPer1000: a.keep_per_1000 } : {}), growth: null });
     const f = growthFrontier(ctx.derived.planGroups, base, metric, exploreBudget(ctx.settings.budget));
     const unit = metric === 'orders' ? 'orders' : 'new customers';
     const pt = (p: (typeof f)[number], i: number) => ({
       step: i, growth_give_up_setting: p.growth?.giveUpInr ?? 0, option: i === 0 ? 'Most profit (no trade-off)' : p.changes.map((c) => `${groupLabel(c.group)}: ${offerLabel(c.from)} → ${offerLabel(c.to)}${c.belowBreakEven ? ' (below break-even)' : ''}`).join('; '),
       profit_month: M(p.profit), profit_given_up: M(p.giveUp), budget_needed: p.budget, needs_bigger_budget: p.budget > ctx.settings.budget,
       new_customers_month: M(p.newCustomers), extra_new_customers: M(p.extraNewCustomers), orders_month: M(p.orders), extra_orders: M(p.extraOrders), orders_change_pct: O(p.ordersChangePct),
-      cost_per_extra: p.costPerExtra === null ? null : M(p.costPerExtra),
+      marginal_cost_per_extra: p.costPerExtra === null ? null : M(p.costPerExtra),
+      avg_cost_per_extra: (metric === 'orders' ? p.extraOrders : p.extraNewCustomers) > 1e-9 && p.giveUp > 0 ? M(p.giveUp / (metric === 'orders' ? p.extraOrders : p.extraNewCustomers)) : null,
     });
     const frontier = f.map(pt);
     // ₹1 tolerance: amounts come back rounded to the rupee and must pick the same option.
     const within = a.give_up_inr !== undefined ? pt(pointWithin(f, a.give_up_inr + 1), f.indexOf(pointWithin(f, a.give_up_inr + 1))) : null;
     const reach = a.extra_customers !== undefined ? (() => { const i = f.findIndex((p) => M(metric === 'orders' ? p.extraOrders : p.extraNewCustomers) >= a.extra_customers!); return i >= 0 ? pt(f[i], i) : null; })() : null;
+    const most = f[f.length - 1];
+    const reachability = a.extra_customers !== undefined ? { reachable: reach !== null, max_extra: M(metric === 'orders' ? most.extraOrders : most.extraNewCustomers), max_needs_budget: most.budget, why_not: reach ? null : `The menu and max discount allow at most +${M(metric === 'orders' ? most.extraOrders : most.extraNewCustomers)} within a ₹${most.budget.toLocaleString('en-IN')} budget; adding offers (get_recommended_offers) can go further.` } : null;
     const keep = a.keep_per_1000 ?? ctx.settings.keepPer1000;
     const squeeze = marginSqueeze(ctx.derived.planGroups, ctx.derived.planSettingsFor(ctx.settings), ctx.settings.keepPer1000, [...new Set([-200, -150, -100, -50, 0, 50, keep - ctx.settings.keepPer1000])].sort((x, y) => x - y))
       .map((r) => ({ keep_per_1000: r.keepPer1000, margin_pct: O(r.margin * 100), break_even_x: R(r.breakEven), groups_with_offer: r.offersOn, profit_month: M(r.profit), new_customers_month: M(r.newCustomers),
-        offers_lost: r.lost.map((l) => `${groupLabel(l.group)}: ${offerLabel(l.from)} → ${offerLabel(l.to)}`), profit_to_give_up_to_keep_todays_new_customers: r.keepGrowthCost === null ? 'not reachable within budget' : M(r.keepGrowthCost), yours: r.current }));
+        offers_lost: r.lost.map((l) => `${groupLabel(l.group)}: ${offerLabel(l.from)} → ${offerLabel(l.to)}`), profit_cost_to_keep_todays_new_customers: r.keepGrowthCost === null ? 'not reachable within budget' : M(r.keepGrowthCost), current_setting: r.current, current_setting_confirmed: ctx.approved || ctx.confirmed?.keepPer1000 === 'merchant' }));
     const m = ctx.settings.keepPer1000 / 1000;
     const repeat = ctx.model.profile.repeat.rate * ctx.model.profile.repeat.aovInr * m * ctx.derived.kept;
-    return { metric: unit, note: 'Every option is a real engine plan (same menu, max discount and minimum return). Choosing one is a draft the merchant approves.', current_setting: ctx.settings.growth ?? null,
-      repeat_profit_per_new_customer_180d: M(repeat), repeat_basis: `${M(ctx.model.profile.repeat.rate * 100)}% of new customers reorder within 180 days at about ₹${M(ctx.model.profile.repeat.aovInr).toLocaleString('en-IN')}, after returns`, frontier, within_give_up: within, reaches_extra: reach, margin_squeeze: squeeze, view: a.view ?? (a.keep_per_1000 !== undefined ? 'margin' : 'growth') };
+    return { metric: unit, frontier_keep_per_1000: a.keep_per_1000 ?? ctx.settings.keepPer1000, note: 'Every option is a real engine plan (same menu, max discount and minimum return). Choosing one is a draft the merchant approves.', current_setting: ctx.settings.growth ?? null,
+      repeat_profit_per_new_customer_180d: M(repeat), repeat_basis: `${M(ctx.model.profile.repeat.rate * 100)}% of new customers reorder within 180 days at about ₹${M(ctx.model.profile.repeat.aovInr).toLocaleString('en-IN')}, after returns`, frontier, within_give_up: within, reaches_extra: reach, reachability, margin_squeeze: squeeze, view: a.view ?? (a.keep_per_1000 !== undefined ? 'margin' : 'growth') };
   },
   get_recommended_offers(ctx: RayCtx) {
     const recs = recommendOffers(ctx.derived.planGroups, ctx.derived.planSettingsFor(ctx.settings));
@@ -376,7 +390,8 @@ export const tools = {
   request_resume(ctx: RayCtx): { draft: Draft; requires_approval: true } | { error: string } {
     return ctx.killed ? { draft: { type: 'resume' }, requires_approval: true } : { error: 'Smart Offers is not paused.' };
   },
-  request_pause(_ctx: RayCtx, a: { scope: string }): { draft: Draft; requires_approval: true } {
+  request_pause(_ctx: RayCtx, a: { scope: string }): { draft: Draft; requires_approval: true } | { error: string } {
+    if (a.scope !== 'all' && !isGroupId(a.scope)) return { error: `Unknown scope. Use 'all' or one group id: ${GROUP_IDS.join(', ')}.` };
     return { draft: { type: 'pause', scope: isGroupId(a.scope) ? a.scope : 'all' }, requires_approval: true };
   },
 } satisfies Record<ToolName, (ctx: RayCtx, args: never) => unknown>;

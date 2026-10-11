@@ -42,6 +42,7 @@ function SimCard({ title, sim }: Extract<RayCard, { kind: 'sim' }>) {
   return (
     <div className="plan mini">
       <div className="plan-head"><div className="plan-title">{title}</div><span className="pill grey">Preview · not applied</span></div>
+      {sim.over_budget && <p className="plan-note warn">Spends {inr(sim.spend)}, over the {inr(sim.budget)} budget: the hard stop would switch offers off when it runs out.</p>}
       <div className="mini-rows">
         {sim.rows.map((r) => <div key={r.group}><span>{shortGroup(r.label)}</span><OfferChip offer={r.offer} /></div>)}
       </div>
@@ -66,7 +67,7 @@ function ScenariosCard({ items }: Extract<RayCard, { kind: 'scenarios' }>) {
           <thead><tr><th>Scenario</th>{items.map((x, i) => <th key={i}>{i + 1}. {x.title}</th>)}</tr></thead>
           <tbody>
             {groups.map((g) => <tr key={g.group}><td>{shortGroup(g.label)}</td>{items.map((x, i) => <td key={i}><OfferChip offer={x.sim.rows.find((r) => r.group === g.group)!.offer} /></td>)}</tr>)}
-            <tr><td><b>Spend</b></td>{items.map((x, i) => <td key={i}>{inr(x.sim.spend)}</td>)}</tr>
+            <tr><td><b>Spend</b></td>{items.map((x, i) => <td key={i}>{inr(x.sim.spend)}{x.sim.over_budget && <span className="sub warn">over the {inr(x.sim.budget)} budget</span>}</td>)}</tr>
             <tr><td><b>Return after returns</b></td>{items.map((x, i) => <td key={i}>{x.sim.spend ? xr(x.sim.return_x) : '—'}</td>)}</tr>
             <tr><td><b>Profit / month</b></td>{items.map((x, i) => <td key={i}><b className={x.sim.profit < 0 ? 'bad' : ''}>{inrSigned(x.sim.profit)}</b></td>)}</tr>
             <tr><td><b>Orders vs today</b></td>{items.map((x, i) => <td key={i}>{pctSigned(x.sim.orders_change_pct)}</td>)}</tr>
@@ -106,6 +107,7 @@ export function DraftCard({ draft }: { draft: Draft }) {
       ) : (
         <p>{draft.groupLabel}: <OfferChip offer={draft.from} muted /> → <OfferChip offer={draft.offer} />. Cost {inr(draft.spend)} / month for about {num(draft.extraOrders)} extra orders ({xr(draft.ret)}{FEATURES.netReturns ? ' after returns' : ''}): <b className={draft.profit < 0 ? 'bad' : 'good'}>{inrSigned(draft.profit)} / month</b>{draft.vsNow ? <> ({inrSigned(draft.vsNow.profit)} vs now)</> : null}.</p>
       ))}
+      {draft.type === 'override' && draft.planAfter && <p className={`small ${draft.planAfter.over_budget ? 'warn' : 'muted'}`}>Whole plan after this change: {inr(draft.planAfter.spend)} of {inr(draft.planAfter.budget)} budget, {inrSigned(draft.planAfter.profit)} a month.{draft.planAfter.over_budget && draft.planAfter.budget_needed ? ` Over budget: the hard stop switches offers off when it runs out. You'd need about ${inr(draft.planAfter.budget_needed)}.` : ''}</p>}
       {draft.type === 'pause' && <p>Pause {draft.scope === 'all' ? 'all Smart Offers' : draft.scope}. Shoppers see the store default checkout.</p>}
       {draft.type === 'resume' && <p>Resume Smart Offers: the approved plan serves again from the next checkout; the holdout stays on.</p>}
       {draft.type === 'settings' && (FEATURES.rayV2 && draft.summary.includes('→')

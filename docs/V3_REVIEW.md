@@ -40,6 +40,7 @@ Every reply is checked for the following (`harness.ts`):
 | Before the fixes (225 conversations) | 588 | 87 |
 | After round 1 | 0 by the first checks; a transcript review found about 40 more problems the checks didn't catch | – |
 | After round 2 (checks tightened to cover them) | **0** | **0** |
+| Final (250 conversations) | **0** | **0** |
 
 ### Problems found and fixed
 
@@ -98,6 +99,30 @@ New system-prompt rules:
 
 The model, keys and function are unchanged.
 
+### What the Live role-play found (all fixed)
+
+**Wrong numbers or unsafe defaults**
+- Plans that included a playbook offer showed a "likely" range that didn't contain their own estimate. Ranges now use the plan's own data, and variants borrow the spread of the closest standard offer.
+- An unknown pause scope ("big carts") widened to pausing everything. It now returns an error.
+- Override drafts could exceed the budget hard stop silently. Drafts and scenario cards now show the whole plan, the over-budget warning and the budget needed.
+- Under a tight budget the optimiser could leave profitable money unspent. At ₹80,000 it planned ₹17,755 a month while ₹19,031 fit. A refill pass now uses the leftover budget. The same pass was added to `docs/reference_engine.py` and the expected outputs regenerated; they didn't change.
+
+**Rounding and labels**
+- A growth amount passed back rounded to the rupee landed one step short. There is now ₹1 tolerance.
+- Labels are clearer:
+  - marginal vs average cost per extra customer;
+  - "not reachable" now says why and gives the maximum;
+  - the pilot figure is labelled as a day-30 projection;
+  - the orders baseline;
+  - whether ₹150 off is on the menu;
+  - titles that say what happened, e.g. "budget ₹2,00,000 (uses ₹94,665)".
+
+**System prompt**
+- One closing question, not two.
+- What to say for offer types the engine can't price.
+- Ask when a bare "yes" is unclear.
+- Creator-code fixes are approved in Weekly reviews.
+
 ## Is the existing code compatible?
 
 Mostly yes. The plan optimiser already supported per-group overrides, a minimum return and offer menus, but Ray's tools didn't expose them. Two gaps needed new engine code:
@@ -111,3 +136,17 @@ These are additive: with no growth setting and the default menu, every existing 
 - **Starting values.** The demo still opens with values filled in, but they are now labelled as typical values for stores this size, and the merchant must confirm or change each one before Approve. The synthetic band is calibrated so its medians equal the starting values (₹500 kept per ₹1,000, ₹1,00,000 budget). This is documented in `src/data/generator/network.ts`.
 - **Growth can go below break-even.** A growth trade-off may run individual offers below break-even, because that is the profit the merchant chose to give up. The plan says so and shows the cost. A minimum return the merchant set above break-even still applies.
 - **Budget for growth.** Growth steps that need a bigger budget say so and set the budget in the same draft.
+
+## Evidence
+
+**Automated tests**
+- `npm test`: 231 tests pass, including 250 conversations × 6 states.
+- `npm run build`: passes.
+
+**Browser (headless Chromium)**
+- v3 checks: 40 of 40 pass. They cover the input gate, inline Edit, chat setup with typical values, "yes please" running the offered scenario, trade-off and recommendation actions, the live-store wording, and no horizontal scroll at 390 px.
+- Full sweep: 24 routes × 3 states × 2 widths, 164 checks, 0 issues.
+- Button sweep: both real dead buttons are fixed. The remaining no-ops are re-clicks of the tab or toggle already selected.
+- Demo tour: all 14 steps run with no errors.
+
+**Still to check on the deployed site:** Ray in Live mode with your key (the wording comes from Claude), and one run of the tour on a phone.

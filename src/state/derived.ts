@@ -119,7 +119,7 @@ export function derive(m: Model, st: DerivedInput) {
   // Playbook priors for offers not on the menu yet (used only when the merchant adds one); measured priors win.
   const planGroups = withPlaybookPriors(learning?.groupsV2 ?? g);
   const draft = buildPlan(planGroups, toPlanSettings(draftSettings, undefined, promoted));
-  const range = planRange(g, draft, m.pool.p25, m.pool.p75);
+  const range = planRange(planGroups, draft, m.pool.p25, m.pool.p75);
   const a10 = alpha10(g, v2 ? margin : v1Margin, kept);
   const a10AtMargin = alpha10(g, draftMargin, kept);
   const allCodes = codesEconomics(g, () => true, v2 ? margin : v1Margin, kept);
@@ -137,7 +137,7 @@ export function derive(m: Model, st: DerivedInput) {
   }, 0), 0);
 
   const live: PlanResult = buildPlan(planGroups, toPlanSettings(liveSettings, st.overrides, promoted));
-  const liveRange = planRange(g, live, m.pool.p25, m.pool.p75);
+  const liveRange = planRange(planGroups, live, m.pool.p25, m.pool.p75);
   const liveOffers: Record<GroupId, OfferId> = st.killed
     ? (Object.fromEntries(GROUP_IDS.map((x) => [x, 'none'])) as Record<GroupId, OfferId>)
     : offerMap(live);

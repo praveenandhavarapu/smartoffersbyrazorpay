@@ -116,6 +116,7 @@ export function buildPlan(groups: GroupStats[], settings: Partial<PlanSettings> 
   const totalSpend = (ch: Map<GroupId, Opt>) => groups.reduce((a, g) => a + g.checkouts * coverage * ch.get(g.id)!.e.spend, 0);
 
   // Budget: apply the downgrade that loses the least objective per rupee saved.
+  const downgraded = totalSpend(choice) > s.budget + 1e-6;
   while (totalSpend(choice) > s.budget + 1e-6) {
     const cands: { k: number; g: GroupId; o: Opt }[] = [];
     for (const g of groups) {
@@ -131,6 +132,22 @@ export function buildPlan(groups: GroupStats[], settings: Partial<PlanSettings> 
     cands.sort((a, b) => a.k - b.k);
     choice.set(cands[0].g, cands[0].o);
   }
+  // Refill (v3, mirrored in reference_engine.py): greedy downgrades can leave budget unused; add the upgrade
+  // with the largest objective gain that still fits, until none does. Plans that never hit the budget are unchanged.
+  while (downgraded) {
+    const room = s.budget - totalSpend(choice);
+    let best: { gain: number; g: GroupId; o: Opt } | null = null;
+    for (const g of groups) {
+      const cur = choice.get(g.id)!, n = g.checkouts * coverage;
+      for (const o2 of opts.get(g.id)!) {
+        const gain = (objective(g, o2.e) - objective(g, cur.e)) * n;
+        const extra = (o2.e.spend - cur.e.spend) * n;
+        if (gain > 1e-9 && extra <= room + 1e-6 && (!best || gain > best.gain + 1e-9)) best = { gain, g: g.id, o: o2 };
+      }
+    }
+    if (!best) break;
+    choice.set(best.g, best.o);
+  }
 
   let infeasible: PlanResult['infeasible'];
   if (s.goal === 'orders_steady') {
@@ -144,7 +161,8 @@ export function buildPlan(groups: GroupStats[], settings: Partial<PlanSettings> 
 
   if (s.growth && s.growth.giveUpInr > 0) {
     const steps = growthSteps(groups, s, choice, coverage, s.growth.metric);
-    const within = steps.filter((x) => x.giveUp <= s.growth!.giveUpInr + 1e-6);
+    // ₹1 tolerance: give-up amounts are shown and passed back rounded to the rupee.
+    const within = steps.filter((x) => x.giveUp <= s.growth!.giveUpInr + 1);
     const last = within[within.length - 1];
     if (last) for (const [gid, o] of last.choice) choice.set(gid, o);
   }
@@ -261,6 +279,18 @@ function assemble(
 export const offerMap = (p: PlanResult): Record<GroupId, OfferId> =>
   Object.fromEntries(p.rows.map((r) => [r.group, r.offer])) as Record<GroupId, OfferId>;
 
+/** Playbook variants have no pool percentiles: use the closest standard offer's spread around the variant's own prior. */
+const RANGE_ANCHOR: Partial<Record<OfferId, OfferId>> = { flat_150: 'flat_200', free_shipping_999: 'free_shipping', free_shipping_prepaid: 'free_shipping' };
+function rangeLift(t: Record<GroupId, Partial<Record<OfferId, number>>>, g: GroupStats, offer: OfferId): number | undefined {
+  const direct = t[g.id]?.[offer];
+  if (direct !== undefined) return direct;
+  const prior = g.priorLiftsPp[offer];
+  if (prior === undefined) return undefined;
+  const a = RANGE_ANCHOR[offer];
+  const anchorPrior = a ? g.priorLiftsPp[a] : undefined, anchorPct = a ? t[g.id]?.[a] : undefined;
+  return anchorPrior && anchorPct !== undefined ? prior * (anchorPct / anchorPrior) : prior;
+}
+
 /** Plan range: re-run the chosen offers' economics with pool 25th / 75th percentile lifts (SPEC 6.2). */
 export function planRange(groups: GroupStats[], p: PlanResult, p25: Record<GroupId, Partial<Record<OfferId, number>>>, p75: Record<GroupId, Partial<Record<OfferId, number>>>) {
   const run = (t: Record<GroupId, Partial<Record<OfferId, number>>>) => {
@@ -268,7 +298,7 @@ export function planRange(groups: GroupStats[], p: PlanResult, p25: Record<Group
     for (const r of p.rows) {
       if (r.offer === 'none') continue;
       const g = groups.find((x) => x.id === r.group)!;
-      const e = perCheckout(g, r.offer, p.settings.margin, t[r.group]?.[r.offer] ?? g.priorLiftsPp[r.offer]);
+      const e = perCheckout(g, r.offer, p.settings.margin, rangeLift(t, g, r.offer));
       spend += r.covered * e.spend;
       sales += r.covered * e.extraSales;
     }

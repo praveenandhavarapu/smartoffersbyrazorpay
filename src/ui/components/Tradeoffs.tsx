@@ -71,7 +71,7 @@ function Squeeze() {
               <td>{inr(r.keepPer1000)}{r.current && ' (yours)'}<span className="sub">break-even {xr(r.breakEven)} · {r.offersOn} of 6 groups get an offer</span></td>
               <td>{inrSigned(r.profit)}</td>
               <td>{num(r.newCustomers)}</td>
-              <td>{r.current ? '—' : r.keepGrowthCost === null ? <span className="muted">not within budget</span> : r.keepGrowthCost < 1 ? 'no cost' : <>give up {inr(r.keepGrowthCost)}<span className="sub">a month</span></>}</td>
+              <td>{r.current ? '—' : r.keepGrowthCost === null ? <span className="muted">not within budget</span> : r.keepGrowthCost < 1 ? 'no cost' : <>{r.profit <= 0 ? `run at −${inr(r.keepGrowthCost)}` : `give up ${inr(r.keepGrowthCost)}`}<span className="sub">a month</span></>}</td>
             </tr>
           ))}</tbody>
         </table>

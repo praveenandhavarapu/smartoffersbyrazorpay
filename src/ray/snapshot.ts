@@ -66,7 +66,7 @@ export function engineSnapshot(ctx: RayCtx) {
     })),
     timeline: (L?.events ?? []).map((e) => ({ date: fmtDate(e.date, false), actor: e.actor, summary: e.summary, needs_approval: e.needsApproval, decision: e.decision ?? null, projected: e.projected })),
     waiting_on_you: [...pendingActions(d.reviews, ctx.reviewDecisions ?? {}).map((i) => i.title), ...(d.hasDraft ? ['Plan changes (draft, not live)'] : [])],
-    playbook_stores_like_yours: FEATURES.playbook ? { stores: ctx.model.pool.size, rows: playbook().map((r) => ({ group: groupLabel(r.group), offer: r.label, stores_tested: r.storesTested, beat_no_offer_pct: r.beatNoOfferPct, median_lift_pp: r.medianLiftPp, on_your_menu: r.inMenu })) } : null,
+    playbook_stores_like_yours: FEATURES.playbook ? { stores: ctx.model.pool.size, rows: playbook().map((r) => ({ group: groupLabel(r.group), offer: r.label, stores_tested: r.storesTested, beat_no_offer_pct: r.beatNoOfferPct, median_lift_pp: r.medianLiftPp, on_your_menu: r.offer !== 'early_access' && ctx.settings.allowedOffers.includes(r.offer), ...(r.offer === 'flat_150' ? { note: 'the agent may test it inside the approved experiment space without a menu change' } : {}) })) } : null,
     decisions_served_to_other_agents: brain,
     prepaid_insight: prepaid ? { blanket_discount: 50, losing_groups: prepaid.losing.map(groupLabel), paying_groups: prepaid.paying.map(groupLabel), net_month: M(prepaid.net) } : null,
   };

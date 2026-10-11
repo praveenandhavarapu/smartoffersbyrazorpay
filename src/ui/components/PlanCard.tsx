@@ -105,6 +105,7 @@ export function PlanCard({ onAsk, inlineSetup }: { onAsk?: (q: string) => void; 
       {v2 && <DraftBar />}
       <InputsCheck onEdit={() => { if (!editing) edit(); }} />
       {editing && <SetupCard embedded />}
+      {p.overBudget && <p className="plan-note warn">Your overrides take spend to {inr(p.spend)}, over the {inr(settings.budget)} budget. The hard stop switches offers off once it runs out; raise the budget or remove an override.</p>}
       {allNone && <p className="plan-note warn">At {num(margin * 100)}% margin no offer pays back; the honest plan is no offers.</p>}
       {p.infeasible && (
         <p className="plan-note warn">

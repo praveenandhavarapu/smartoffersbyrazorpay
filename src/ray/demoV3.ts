@@ -39,14 +39,14 @@ function tradeText(x: Trade, giveUp?: number, extra?: number, worthAsk = false):
   if (f.length < 2) return { text: `At your numbers, no offer adds ${unit} beyond your most-profit plan (**${inrSigned(base.profit_month)} a month**). Adding offers to your menu or raising the budget can; see Recommended offers.`, next: { label: 'Recommended offers', message: 'What other offers should I try?' } };
   const step = (p: Trade['frontier'][number]) => p.profit_given_up <= 0
     ? `${p.option}: **+${num(gained(p))} ${unit}** and **${inr(-p.profit_given_up)}** more profit a month, with a ${inr(p.budget_needed)} budget`
-    : `${p.option}: **+${num(gained(p))} ${unit}** for **${inr(p.profit_given_up)}** less profit a month${p.cost_per_extra !== null && p.cost_per_extra > 0 ? ` (this step ${inr(p.cost_per_extra)} each)` : ''}${p.needs_bigger_budget ? `, needs a ${inr(p.budget_needed)} budget` : ''}`;
+    : `${p.option}: **+${num(gained(p))} ${unit}** for **${inr(p.profit_given_up)}** less profit a month${p.marginal_cost_per_extra !== null && p.marginal_cost_per_extra > 0 ? ` (this step ${inr(p.marginal_cost_per_extra)} each)` : ''}${p.needs_bigger_budget ? `, needs a ${inr(p.budget_needed)} budget` : ''}`;
   const draftNext = (p: Trade['frontier'][number]): QuickReply => ({ label: p.profit_given_up > 0 ? `Draft: give up ${inr(p.profit_given_up)} for +${num(gained(p))}` : `Draft: ${inr(p.budget_needed)} budget, +${num(gained(p))}`, message: `Draft growth step ${p.step}` });
   const stepChips = f.slice(1, 4).map(draftNext);
   const worth = unit === 'new customers' ? `\nEach new customer brings about **${inr(x.repeat_profit_per_new_customer_180d)}** of repeat profit in 180 days (${x.repeat_basis}), so a step costing less than that per customer pays back over time.` : '';
   if (worthAsk && unit === 'new customers') {
-    const costs = f.slice(1).map((p) => p.cost_per_extra).filter((c): c is number => c !== null && c > 0);
+    const costs = f.slice(1).map((p) => p.marginal_cost_per_extra).filter((c): c is number => c !== null && c > 0);
     const repeat = x.repeat_profit_per_new_customer_180d;
-    const paying = f.slice(1).filter((p) => p.cost_per_extra !== null && p.cost_per_extra <= repeat);
+    const paying = f.slice(1).filter((p) => p.marginal_cost_per_extra !== null && p.marginal_cost_per_extra <= repeat);
     if (!costs.length) return { text: `At your numbers there's no growth step to weigh: no offer adds new customers beyond the most-profit plan.` };
     return {
       text: `${paying.length ? `**Partly.** ${paying.length} step${paying.length > 1 ? 's' : ''} cost less per new customer than the ${inr(repeat)} of repeat profit a new customer brings in 180 days, so ${paying.length > 1 ? 'they pay' : 'it pays'} back over time.` : `**Not on repeat profit alone.** Each step costs ${inr(Math.min(...costs))}–${inr(Math.max(...costs))} per extra new customer, and a new customer brings about **${inr(repeat)}** of repeat profit in 180 days (${x.repeat_basis}).`} Growth beyond that is a choice to pay for customers (brand, longer-term value), and the card shows exactly what each step costs.`,
@@ -72,11 +72,11 @@ function tradeText(x: Trade, giveUp?: number, extra?: number, worthAsk = false):
 
 function squeezeText(x: Trade, keep?: number): { text: string; next?: QuickReply } {
   const rows = x.margin_squeeze;
-  const mine = rows.find((r) => r.yours)!;
-  const hit = (r: Trade['margin_squeeze'][number]) => (typeof r.profit_to_give_up_to_keep_todays_new_customers === 'number' ? (r.profit_to_give_up_to_keep_todays_new_customers < 1 ? 'no extra cost' : r.profit_to_give_up_to_keep_todays_new_customers < 100 ? `almost nothing (${inr(r.profit_to_give_up_to_keep_todays_new_customers)} a month)` : `give up **${inr(r.profit_to_give_up_to_keep_todays_new_customers)}** a month`) : 'not reachable within your budget');
+  const mine = rows.find((r) => r.current_setting)!;
+  const hit = (r: Trade['margin_squeeze'][number]) => (typeof r.profit_cost_to_keep_todays_new_customers === 'number' ? (r.profit_cost_to_keep_todays_new_customers < 1 ? 'no extra cost' : r.profit_cost_to_keep_todays_new_customers < 100 ? `almost nothing (${inr(r.profit_cost_to_keep_todays_new_customers)} a month)` : (r.profit_month <= 0 ? `run at a loss of about **${inr(r.profit_cost_to_keep_todays_new_customers)}** a month` : `give up **${inr(r.profit_cost_to_keep_todays_new_customers)}** a month`)) : 'not reachable within your budget');
   if (keep !== undefined) {
     const r = rows.find((y) => y.keep_per_1000 === keep);
-    if (r && !r.yours) {
+    if (r && !r.current_setting) {
       return { text: `If you keep ₹${num(keep)} of ₹1,000 (${num(r.margin_pct, 1)}%), break-even rises to **${xr(r.break_even_x)}**: ${r.groups_with_offer} of 6 groups keep an offer and profit is **${inrSigned(r.profit_month)} a month** (now ${inrSigned(mine.profit_month)}).${r.offers_lost.length ? `\n- You'd lose: ${r.offers_lost.join('; ')}` : ''}\n- To keep today's ${num(mine.new_customers_month)} new customers anyway: ${hit(r)}\nIf that's your real margin now, I can draft it.`, next: { label: `Draft: I keep ₹${num(keep)} of ₹1,000`, message: `My margin is ${keep / 10}%` } };
     }
   }
@@ -85,7 +85,7 @@ function squeezeText(x: Trade, keep?: number): { text: string; next?: QuickReply
   const firstNone = [...rows].sort((a, b) => b.keep_per_1000 - a.keep_per_1000).find((r) => r.groups_with_offer === 0);
   const floorLine = lastPaying && firstNone && firstNone.keep_per_1000 < lastPaying.keep_per_1000 ? ` Offers still pay down to keeping **₹${num(lastPaying.keep_per_1000)}** of ₹1,000; at ₹${num(firstNone.keep_per_1000)} none do.` : '';
   return {
-    text: `At your margin (keep ₹${num(mine.keep_per_1000)}) the plan makes **${inrSigned(mine.profit_month)} a month**.${floorLine} If you keep less of each sale:\n${bullets(lower.map((r) => `₹${num(r.keep_per_1000)}: ${r.groups_with_offer} groups keep an offer, **${inrSigned(r.profit_month)}**${r.offers_lost.length ? ` (loses ${r.offers_lost.map((o) => o.split(':')[0]).join(', ')})` : ''}; keeping today's new customers: ${hit(r)}`), 4)}\nThe table below has every step. Tell me what you keep from ₹1,000 and I'll run your exact number.`,
+    text: `At ${mine.current_setting_confirmed ? 'your margin' : 'the margin in use'} (keep ₹${num(mine.keep_per_1000)}) the plan makes **${inrSigned(mine.profit_month)} a month**.${floorLine} If you keep less of each sale:\n${bullets(lower.map((r) => `₹${num(r.keep_per_1000)}: ${r.groups_with_offer} groups keep an offer, **${inrSigned(r.profit_month)}**${r.offers_lost.length ? ` (loses ${r.offers_lost.map((o) => o.split(':')[0]).join(', ')})` : ''}; keeping today's new customers: ${hit(r)}`), 4)}\nThe table below has every step. Tell me what you keep from ₹1,000 and I'll run your exact number.`,
   };
 }
 

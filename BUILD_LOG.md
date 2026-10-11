@@ -117,7 +117,19 @@ Feedback: Ray assumed numbers (4x, 30%, ₹50,000 chips), said "I couldn't run t
     - Typical values are flagged in every answer that uses them; chips depend on the store's state.
   - **Checks.** 250 conversations × 6 states run as a test (`scenarios/conversations.test.ts`) with 14 invariants; 0 failures (588 before). Two transcript reviews by a separate agent were turned into those invariants. Tests 227 passing; build passes.
 
+- Part D (Live role-play fixes and QA, ~1.5 h):
+  - An agent played Live Ray with the real prompt and tools over 18 conversations. It found:
+    - plan ranges for playbook offers that excluded their own estimate;
+    - an unknown pause scope widening to "all";
+    - override drafts silently over budget;
+    - a greedy budget step that left profitable budget unused;
+    - a ₹1 rounding miss in growth;
+    - unclear labels.
+  - All fixed, and each has a regression test in `v3.live.test.ts`. Tests 231 passing; build passes.
+  - Browser: 40 v3 checks, 164 sweep checks, button sweep and the 14-step tour all clean.
+
 <!-- Claude Code adds unclear spec points here with the option it chose. -->
+- v3: the plan optimiser's budget step (greedy downgrade by least profit lost per rupee) could leave budget unused when a cheaper profitable offer still fit (₹80,000: ₹17,755 planned vs ₹19,031 possible). Chose: add a refill pass after the downgrades, in both `src/engine/plan.ts` and `docs/reference_engine.py`, and regenerate `fixtures/expected_outputs.json` with the script. The expected outputs did not change (the ₹1,00,000 and ₹50,000 cases already used the room).
 - v3: "don't assume, ask" vs a demo that opens with numbers already filled. Chose: keep the starting values but label them as typical values for stores this size (computed from the synthetic network), require the merchant to confirm or change each input before Approve, and calibrate the synthetic band so its medians equal the starting values (₹500 keep, ₹1,00,000 budget), documented in `network.ts`.
 - v2 §10 defaults say COD fails 28%; the fixture says Alpha's failed-COD rate is 22% (and the 81% kept rate uses it). Chose: the fixture's 22% everywhere. At 22% a blanket ₹50 prepaid discount loses in all 6 groups; the insight copy is computed and says so.
 - v2 §7.2's decision rule ("challenger lower bound ≥ champion − tolerance") cannot promote with ~38 challenger shoppers. Chose: blend the store's result with the playbook (same trust weighting as the plan) and require cost lower, profit per shopper at least equal, and the store's lift gap within noise.

@@ -47,7 +47,8 @@ describe('scenario cards match what Ray ran (the ₹33,062 vs ₹94,665 mismatch
   });
   it('one scenario shows one card titled with its settings', () => {
     const { cards } = cardsFromCalls([{ name: 'simulate_plan', args: { budget: 50000 }, result: runTool(ctx, 'simulate_plan', { budget: 50000 }) }]);
-    expect(cards[0]).toMatchObject({ kind: 'sim', title: 'Scenario: budget ₹50,000 (not applied)' });
+    // The title says what was asked and what happened (the plan doesn't need all of a ₹50,000 budget).
+    expect(cards[0]).toMatchObject({ kind: 'sim', title: expect.stringMatching(/^Scenario: budget ₹50,000 \(uses ₹[\d,]+\) \(not applied\)$/) });
   });
 });
 
@@ -87,6 +88,30 @@ describe('untrusted Live-mode arguments never crash or break guardrails', () => 
         expect(out, `${t.name} ${JSON.stringify(v)}`).not.toMatch(/NaN|Infinity|undefined/);
       }
     }
+  });
+  it('a pause for an unknown group is refused, never widened to "all"', () => {
+    expect(runTool(ctx, 'request_pause', { scope: 'big carts' })).toMatchObject({ error: expect.stringMatching(/Unknown scope/) });
+  });
+  it('an override draft reports the whole plan and whether it breaks the budget', () => {
+    const r = runTool(ctx, 'draft_plan_change', { group_id: 'returning', offer_id: 'flat_100' }) as { plan_after: { over_budget: boolean; budget_needed: number | null; spend: number } };
+    expect(r.plan_after.over_budget).toBe(true);
+    expect(r.plan_after.budget_needed).toBeGreaterThanOrEqual(r.plan_after.spend);
+  });
+  it('plans with playbook offers get a range that contains their own estimate', () => {
+    for (const add of [['flat_150'], ['free_shipping_prepaid'], ['free_shipping_999'], ['flat_150', 'free_shipping_prepaid']]) for (const m of [30, 40, 50, 60]) {
+      const r = runTool(ctx, 'simulate_plan', { add_offers: add, margin_pct: m }) as ReturnType<typeof tools.simulate_plan>;
+      if (!r.spend) continue;
+      expect(r.profit_range[0]).toBeLessThanOrEqual(r.profit + 1);
+      expect(r.profit_range[1]).toBeGreaterThanOrEqual(r.profit - 1);
+      expect(r.return_range[0]).toBeLessThanOrEqual(r.return_x + 0.01);
+      expect(r.return_range[1]).toBeGreaterThanOrEqual(r.return_x - 0.01);
+    }
+  });
+  it('a tight budget uses leftover room for profitable offers (refill after greedy downgrades)', () => {
+    const r = runTool(ctx, 'simulate_plan', { budget: 80000 }) as ReturnType<typeof tools.simulate_plan>;
+    const lower = runTool(ctx, 'simulate_plan', { budget: 61000 }) as ReturnType<typeof tools.simulate_plan>;
+    expect(r.profit).toBeGreaterThan(lower.profit);
+    expect(r.spend).toBeLessThanOrEqual(80000);
   });
   it('max discount above ₹250 and uncapped budgets are refused', () => {
     expect(runTool(ctx, 'simulate_plan', { max_discount_inr: 400 })).toMatchObject({ error: expect.stringMatching(/Guardrail/) });
