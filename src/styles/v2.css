@@ -76,3 +76,12 @@
 .act-undo { white-space: nowrap; }
 .dtable td.act { white-space: normal; min-width: 280px; max-width: 520px; line-height: 1.4; }
 .exp-table td .sub, .dtable td .sub { white-space: normal; }
+/* Phase 4: playbook */
+.pb-side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.pb-side > div { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: grid; gap: 2px; background: var(--surface); }
+.pb-side .pb-k { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink3); }
+.pb-side b { font-size: 16px; }
+@media (max-width: 520px) { .pb-side { grid-template-columns: 1fr; } }
+.pb-try { display: grid; gap: 8px; margin-top: 12px; }
+.pb-try-row { display: flex; gap: 8px; justify-content: space-between; align-items: center; flex-wrap: wrap; border-top: 1px solid var(--line2); padding-top: 8px; font-size: 13px; }
+.pb-confirm { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }

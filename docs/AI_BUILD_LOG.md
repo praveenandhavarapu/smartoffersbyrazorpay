@@ -87,3 +87,17 @@ How the v2 build was made: what the AI (Claude Code) did, which decisions came f
   - Measured +8.8 vs +8.3 pp at the week-3 review (spec +9.6 vs +9.2). The store's true lift for big carts is 9.5 pp in `pilot_truth.json`, and small-sample rounding takes it lower.
   - "Day 13 of ~14" in the strip (spec "of ~21"), because the decision is due at the week-3 review.
 - **Time:** ~2.5 h.
+
+## Phase 4 — Network playbook "Stores like yours" (11 Oct 2026)
+
+- **AI did:**
+  - `PlaybookCard` on Setup & plan: the benchmark table beside "Your store" (measured lift with range once live), the peer definition, the synthetic footer and a Give-to-get toggle (on by default, logged).
+  - "Offers you haven't tried" with **Add as challenger**. Off-menu offers first show "Needs your OK to add to your offer menu". The organic ₹999+ offer starts the Phase 3 test (same decision key as the week-2 review). Other approvals are queued in the Experiments tab.
+  - `WhyPlaybook` adds "Playbook (180 stores like yours) · Your store" side by side to every **Why?** drawer, in the plan and in Results.
+  - 3 tests: the four priors and ranges are unchanged, every row covers ≥ 20 stores, no store names, menu flags.
+- **From the spec (Praveen):** "what worked, not what others give", peer definition text, the benchmark rows, ≥ 20-store rule, off-menu approval, Give-to-get line.
+- **Assumed / decided:**
+  - Where the 180-store pool already has an estimate for a group × offer, the table shows the pool median, so the playbook never disagrees with the plan's priors. "₹100 off, new from ads under ₹1,500" reads +8.0 pp (spec table +6.2) and "₹100 off, returning" reads +2.0 pp (spec +1.8).
+  - "Offers you haven't tried" hides offers that beat no-offer in under half the tests (returning ₹100 off) so the list never suggests a loss-maker.
+  - A decision on a review proposal takes effect from that review's date, because the demo clock jumps. Approving the organic test at day 20 shows it running since 16 Oct.
+- **Time:** ~40 min.

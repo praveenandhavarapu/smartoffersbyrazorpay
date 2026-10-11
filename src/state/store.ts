@@ -58,6 +58,8 @@ type Persisted = {
   learningDecisions: Record<string, 'approved' | 'declined'>;
   /** v2 §7.6: automatic agent steps the merchant undid (event ids). */
   undone: string[];
+  /** v2 §8: share anonymised results to get the playbook (default on). */
+  giveToGet: boolean;
   outageEvents: number;
   audit: AuditEntry[];
 };
@@ -84,6 +86,7 @@ type Actions = {
   setExperimentSpace: (on: boolean) => void;
   decideLearning: (key: string, d: 'approved' | 'declined', summary: string, impact?: string) => void;
   undoEvent: (id: string, summary: string) => void;
+  setGiveToGet: (on: boolean) => void;
   applyOverride: (g: GroupId, o: OfferId, from: OfferId, costNote: string, actor?: Actor) => void;
   clearOverride: (g: GroupId) => void;
   kill: () => void;
@@ -102,7 +105,7 @@ export type AppState = Persisted & Ephemeral & Actions;
 const initial: Persisted = {
   settings: DEFAULT_USER_SETTINGS, approved: false, approvedSettings: null, approvedOn: null, overrides: {}, killed: false,
   moment: 'before', creatorFix: 'pending', creatorFixedOn: null, rayMode: 'live', settlementMode: 't1', instantSettlements: [],
-  reviewDecisions: {}, reviewsOpened: [], notificationsRead: [], pilotDecision: null, alpha10Restored: false, experiments: {}, experimentSpace: true, learningDecisions: {}, undone: [], outageEvents: 0,
+  reviewDecisions: {}, reviewsOpened: [], notificationsRead: [], pilotDecision: null, alpha10Restored: false, experiments: {}, experimentSpace: true, learningDecisions: {}, undone: [], giveToGet: true, outageEvents: 0,
   audit: [],
 };
 
@@ -133,7 +136,7 @@ const pick = (s: AppState): Persisted => ({
   killed: s.killed, moment: s.moment, creatorFix: s.creatorFix, creatorFixedOn: s.creatorFixedOn, rayMode: s.rayMode, settlementMode: s.settlementMode,
   instantSettlements: s.instantSettlements, reviewDecisions: s.reviewDecisions, reviewsOpened: s.reviewsOpened,
   notificationsRead: s.notificationsRead, pilotDecision: s.pilotDecision, alpha10Restored: s.alpha10Restored,
-  experiments: s.experiments, experimentSpace: s.experimentSpace, learningDecisions: s.learningDecisions, undone: s.undone, outageEvents: s.outageEvents, audit: s.audit,
+  experiments: s.experiments, experimentSpace: s.experimentSpace, learningDecisions: s.learningDecisions, undone: s.undone, giveToGet: s.giveToGet, outageEvents: s.outageEvents, audit: s.audit,
 });
 
 export const describeSettings = (s: Settings) =>
@@ -205,6 +208,10 @@ export const useStore = create<AppState>((set, get) => {
     undoEvent: (id, summary) => {
       set((st) => ({ undone: st.undone.includes(id) ? st.undone : [...st.undone, id] }));
       log('Merchant (Praveen)', 'experiment', `Undid an automatic step: ${summary}`);
+    },
+    setGiveToGet: (on) => {
+      set({ giveToGet: on });
+      log('Merchant (Praveen)', 'rule_change', on ? 'Share anonymised results to get the playbook: on' : 'Share anonymised results to get the playbook: off', on ? 'off' : 'on', on ? 'on' : 'off');
     },
     decideExperiment: (id, d, summary) => {
       set((st) => ({ experiments: { ...st.experiments, [id]: d } }));

@@ -18,6 +18,7 @@ import { FEATURES } from '../../config/features';
 import { RETURN_LABEL } from '../../engine/net';
 import { NowStrip } from '../components/NowStrip';
 import { ModeChip } from '../components/Experiments';
+import { WhyPlaybook } from '../components/Playbook';
 import { dayOf } from '../../engine/learning';
 import { HeroMetric } from '../components/HeroMetric';
 
@@ -157,7 +158,7 @@ export function Results() {
                         <button className="whyl" onClick={() => openOverride(r.group, live === 'none' ? (Object.keys(g.priorLiftsPp)[0] as typeof live) : 'none')}>Override</button>
                       </td>
                     </tr>,
-                    why === r.group && <tr key={r.group + 'w'} className="why-row show"><td colSpan={7}>{explainGroup(g, planRow, derived.margin, derived.kept)}</td></tr>,
+                    why === r.group && <tr key={r.group + 'w'} className="why-row show"><td colSpan={7}>{explainGroup(g, planRow, derived.margin, derived.kept)}{FEATURES.playbook && <WhyPlaybook group={r.group} offer={r.offer} />}</td></tr>,
                   ];
                 })}
               </tbody>

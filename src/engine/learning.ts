@@ -347,6 +347,11 @@ export function buildLearning(groups: GroupStats[], i: LearningInput, margin: nu
       ? (gid === 'returning' ? 'None: no cash offer pays back for loyal buyers. A non-cash perk would need your OK.' : 'None: creator codes keep running as they are.')
       : gid === 'lapsed' ? `None: Playbook mode; too few shoppers to split for a test. Re-test after the decay check (${fmt(D.decayCheck)}).`
       : 'None yet: next in the queue.';
+    const queued = Object.keys(i.decisions).find((k) => k.startsWith(`pb:${gid}:`) && i.decisions[k] === 'approved');
+    if (queued) {
+      const o = queued.split(':')[2];
+      return { ...base, id: queued, challenger: null, reason: `Queued by you from the playbook: ${playbookFor(gid, o as OfferId)?.label ?? o}. Starts after the current test.`, status: 'none' as const, source: 'playbook' as const };
+    }
     return { ...base, id: `none-${gid}`, challenger: null, reason, status: 'none' };
   });
 

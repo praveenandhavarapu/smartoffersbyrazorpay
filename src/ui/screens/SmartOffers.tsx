@@ -9,6 +9,8 @@ import { ApprovedCard, WasteCard, CreatorsCard } from '../components/RayCards';
 import { OpportunityPanel, StopButton, WhyAI } from '../components/lifecycle';
 import { PageHeader, Tabs } from '../components/kit';
 import { Clover } from '../components/Icons';
+import { FEATURES } from '../../config/features';
+import { PlaybookCard } from '../components/Playbook';
 
 type Tab = 'overview' | 'plan' | 'checkout' | 'creators';
 
@@ -38,7 +40,7 @@ export function SmartOffers() {
           <div className="card pad hint-row"><span>Prefer a conversation? Ray asks four questions and builds the same plan.</span><button className="btn primary sm" onClick={() => askRay('Set up Smart Offers')}>Set up with Ray</button></div>
         </div>
       ))}
-      {tab === 'plan' && <div className="narrow stack-gap"><SetupCard /><PlanCard onAsk={askRay} />{approved && <ApprovedCard />}<WhyAI /></div>}
+      {tab === 'plan' && <div className="narrow stack-gap"><SetupCard /><PlanCard onAsk={askRay} />{approved && <ApprovedCard />}{FEATURES.playbook && <PlaybookCard />}<WhyAI /></div>}
       {tab === 'checkout' && <Checkout />}
       {tab === 'creators' && <div className="narrow"><CreatorsCard /></div>}
     </div>

@@ -11,6 +11,7 @@ import { groupLabel, offerLabel } from '../../lib/labels';
 import { Check, Shield } from './Icons';
 import { OfferChip, shortGroup } from './bits';
 import { HoldoutNote } from './lifecycle';
+import { WhyPlaybook } from './Playbook';
 
 /** Yellow "Draft · not live" bar: what changes, and the only two ways out (Approve changes / Discard). */
 function DraftBar() {
@@ -89,7 +90,7 @@ export function PlanCard({ onAsk }: { onAsk?: (q: string) => void }) {
                   </td>
                 </tr>,
                 why === r.group && (
-                  <tr key={r.group + '-why'} className="why-row show"><td colSpan={5}>{explainGroup(g, r, margin, p.settings.keptRate ?? 1)}</td></tr>
+                  <tr key={r.group + '-why'} className="why-row show"><td colSpan={5}>{explainGroup(g, r, margin, p.settings.keptRate ?? 1)}{FEATURES.playbook && <WhyPlaybook group={r.group} offer={r.offer} />}</td></tr>
                 ),
               ];
             })}
