@@ -18,21 +18,21 @@ const offersOn = (s: Sim) => s.rows.filter((r) => r.offer !== 'none');
 
 export const T = {
   help: () => "Here's what I can help with: payments, settlements, refunds and disputes for any period; how your coupons are doing; setting up Smart Offers and testing a budget, margin or return target; explaining why a shopper group gets an offer; and pilot results against the holdout.",
-  payments: (s: Pay) => `${s.window}: ${inr(s.collected)} collected from ${num(s.captured_payments)} payments (${num(s.success_rate_pct, 1)}% success rate, ${num(s.failed_payments)} failed). UPI ${num(s.method_mix.upi.share_pct, 0)}%, cards ${num(s.method_mix.card.share_pct, 0)}%. ${s.refunds ? `${num(s.refunds)} refunds (${inr(s.refunded)}).` : 'No refunds.'} Fees ${inr(s.fees)} + GST ${inr(s.gst_on_fees)}.`,
-  daily: (g: Daily) => `Day by day, ${g.window}: ${inr(g.total_collected)} collected, about ${inr(g.average_per_day)} a day. Best day ${g.best_day.date} (${inr(g.best_day.collected)}), lowest ${g.lowest_day.date} (${inr(g.lowest_day.collected)}). The second half of the period is ${g.second_half_vs_first_half_pct >= 0 ? 'up' : 'down'} ${num(Math.abs(g.second_half_vs_first_half_pct), 1)}% on the first.`,
+  payments: (s: Pay) => `${s.window}: **${inr(s.collected)}** collected from **${num(s.captured_payments)}** payments (${num(s.success_rate_pct, 1)}% success rate, ${num(s.failed_payments)} failed). UPI ${num(s.method_mix.upi.share_pct, 0)}%, cards ${num(s.method_mix.card.share_pct, 0)}%. ${s.refunds ? `${num(s.refunds)} refunds (${inr(s.refunded)}).` : 'No refunds.'} Fees ${inr(s.fees)} + GST ${inr(s.gst_on_fees)}.`,
+  daily: (g: Daily) => `Day by day, ${g.window}: **${inr(g.total_collected)}** collected, about **${inr(g.average_per_day)} a day**. Best day ${g.best_day.date} (${inr(g.best_day.collected)}), lowest ${g.lowest_day.date} (${inr(g.lowest_day.collected)}). The second half of the period is ${g.second_half_vs_first_half_pct >= 0 ? 'up' : 'down'} ${num(Math.abs(g.second_half_vs_first_half_pct), 1)}% on the first.`,
   failed: (s: Pay) => `${num(s.failed_payments)} payments failed in ${s.window} (success rate ${num(s.success_rate_pct, 1)}%). Most failures are cancelled or expired UPI requests and failed card OTPs; customers usually retry. Here are the latest ones.`,
   settlements: (s: Setl, next: boolean) => {
-    const nx = s.next_scheduled ? `Next settlement: ${inr(s.next_scheduled.amount)} on ${s.next_scheduled.date}.` : 'No settlement is scheduled right now.';
+    const nx = s.next_scheduled ? `Next settlement: **${inr(s.next_scheduled.amount)}** on ${s.next_scheduled.date}.` : 'No settlement is scheduled right now.';
     if (next) return `${nx} Your schedule is ${s.schedule}.`;
-    return `${s.window}: ${num(s.settled_count)} settlements, ${inr(s.settled_amount)} paid to your bank after ${inr(s.fees_and_gst)} fees and GST. ${nx}${s.available_for_instant !== null ? ` ${inr(s.available_for_instant)} is available to settle instantly.` : ''}`;
+    return `${s.window}: ${num(s.settled_count)} settlements, **${inr(s.settled_amount)}** paid to your bank after ${inr(s.fees_and_gst)} fees and GST. ${nx}${s.available_for_instant !== null ? ` ${inr(s.available_for_instant)} is available to settle instantly.` : ''}`;
   },
   refunds: (r: Ref) => `${r.window}: ${num(r.refunds)} refunds, ${inr(r.refunded)}. Disputes: ${num(r.open_disputes)} open or under review out of ${num(r.disputes_all_time.length)} in six months.`,
 
-  waste: (w: Waste) => `${w.code} cost ${inr(w.spend)} last month and brought ${inr(w.extra_sales)} of extra sales: ${xr(w.return_x)} against a ${xr(w.break_even_x)} break-even, so it lost ${inr(Math.abs(w.profit))}. ${inr(w.to_returning)} of it went to returning buyers who would have bought anyway.`,
+  waste: (w: Waste) => `**${w.code} cost ${inr(w.spend)} last month** and brought ${inr(w.extra_sales)} of extra sales: ${xr(w.return_x)} against a ${xr(w.break_even_x)} break-even, so it lost **${inr(Math.abs(w.profit))}**. ${inr(w.to_returning)} of it went to returning buyers who would have bought anyway.`,
 
   plan: (s: Sim) => {
     const on = offersOn(s);
-    return `Here's the plan: offers for ${on.length} of ${s.rows.length} shopper groups, ${inr(s.spend)} spend of your ${inr(s.budget)} budget, ${inr(s.extra_sales)} extra sales at ${xr(s.return_x)} (likely ${xr(s.return_range[0])}–${xr(s.return_range[1])}), about ${inrSigned(s.profit)} a month. Nothing goes live until you click Approve.`;
+    return `Here's the plan: offers for ${on.length} of ${s.rows.length} shopper groups, **${inr(s.spend)}** spend of your ${inr(s.budget)} budget, **${inr(s.extra_sales)}** extra sales at **${xr(s.return_x)}** (likely ${xr(s.return_range[0])}–${xr(s.return_range[1])}), about **${inrSigned(s.profit)} a month**. Nothing goes live until you click Approve.`;
   },
 
   floorPushback: (want: number, s: Sim, s3: Sim | null) => {
@@ -55,11 +55,11 @@ export const T = {
   budget: (b: number, s: Sim) => `With ${inr(b)}: ${inr(s.spend)} spend, ${inr(s.extra_sales)} extra sales, ${inrSigned(s.profit)} a month, orders ${num(s.orders)} (${pctSigned(s.orders_change_pct)}). Offers kept: ${offersOn(s).map((r) => `${r.label.split(' · ').slice(0, 2).join(' · ')}: ${r.offer_label}`).join('; ') || 'none'}.`,
 
   override: (label: string, offer: string, d: { spend: number; extraOrders: number; ret: number; profit: number }) =>
-    `Drafted: ${label} gets ${offer}. It would cost ${inr(d.spend)} a month for ${num(d.extraOrders, 1)} extra orders, a ${xr(d.ret)} return: ${inrSigned(d.profit)} a month. I've only drafted it; it needs your Approve.`,
+    `Drafted: ${label} gets ${offer}. It would cost **${inr(d.spend)} a month** for ${num(d.extraOrders, 1)} extra orders, a ${xr(d.ret)} return: **${inrSigned(d.profit)} a month**. I've only drafted it; it needs your Approve.`,
 
-  noPromise: (c: Current) => `I can't promise an exact figure. Expected: ${inrSigned(c.profit)} a month (likely ${inrSigned(c.profit_range[0])} to ${inrSigned(c.profit_range[1])}), return ${xr(c.return_x)} (likely ${xr(c.return_range[0])}–${xr(c.return_range[1])}). The holdout will measure your own numbers, and early weeks are still learning.`,
+  noPromise: (c: Current) => `I can't promise an exact figure. Expected: **${inrSigned(c.profit)} a month** (likely ${inrSigned(c.profit_range[0])} to ${inrSigned(c.profit_range[1])}), return ${xr(c.return_x)} (likely ${xr(c.return_range[0])}–${xr(c.return_range[1])}). The holdout will measure your own numbers, and early weeks are still learning.`,
 
-  results: (r: Results) => `Day ${r.days}: ${inr(r.spend)} spent, ${num(r.extra_orders, 1)} extra orders (90% range ${num(r.extra_orders_range[0])}–${num(r.extra_orders_range[1])}), return ${xr(r.return_x)} (range ${xr(r.return_range[0])}–${xr(r.return_range[1])}), ${inrSigned(r.profit)} so far. ${r.still_learning_groups.length} offer groups are still learning, so profitability isn't proven yet.`,
+  results: (r: Results) => `Day ${r.days}: ${inr(r.spend)} spent, **${num(r.extra_orders, 1)} extra orders** (90% range ${num(r.extra_orders_range[0])}–${num(r.extra_orders_range[1])}), return ${xr(r.return_x)} (range ${xr(r.return_range[0])}–${xr(r.return_range[1])}), ${inrSigned(r.profit)} so far. ${r.still_learning_groups.length} offer groups are still learning, so profitability isn't proven yet.`,
 
   creators: (c: Creators) => {
     const flagged = c.codes.filter((x) => x.flag);

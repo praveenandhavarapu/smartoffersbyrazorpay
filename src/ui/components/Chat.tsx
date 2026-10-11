@@ -7,6 +7,7 @@ import { useStore } from '../../state/store';
 import { inr, inrSigned, num, pctSigned, xr } from '../../lib/format';
 import { OFFER_BY_ID } from '../../data/fixtures';
 import { Clover, Send } from './Icons';
+import { Markdown } from './Markdown';
 import { OfferChip, shortGroup } from './bits';
 import { PlanCard } from './PlanCard';
 import { ApprovedCard, CreatorsCard, DailyCard, PaymentsCard, PaymentsListCard, RefundsCard, ResultsCard, SettlementsCard, WasteCard } from './RayCards';
@@ -95,13 +96,22 @@ function CardView({ card, onAsk }: { card: RayCard; onAsk: (q: string) => void }
   }
 }
 
+function CopyButton({ text }: { text: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button className="msg-act" onClick={() => { void navigator.clipboard?.writeText(text.replace(/\*\*/g, '')).then(() => { setDone(true); setTimeout(() => setDone(false), 1500); }); }} aria-label="Copy answer">
+      {done ? 'Copied' : 'Copy'}
+    </button>
+  );
+}
+
 function Msg({ m, onAsk, last }: { m: ChatMsg; onAsk: (q: string) => void; last: boolean }) {
   if (m.role === 'user') return <div className="msg-user">{m.text}</div>;
   return (
     <div className="msg-ray">
       <div className="ray-line"><span className="clover"><Clover /></span><b>Ray</b>{m.refused && <span className="mono-tag amber">Declined</span>}{m.via === 'live' && <span className="mono-tag green">Live</span>}</div>
       {m.note && <div className="ray-note" role="status">{m.note}</div>}
-      <p>{m.text}</p>
+      <div className="ray-doc"><Markdown text={m.text} /><div className="msg-acts"><CopyButton text={m.text} /></div></div>
       {m.cards?.map((c, i) => <CardView key={i} card={c} onAsk={onAsk} />)}
       {last && m.quick && <div className="chips quick">{m.quick.map((q) => <button key={q.label} className="chip hl" onClick={() => onAsk(q.message)}>{q.label}</button>)}</div>}
     </div>
