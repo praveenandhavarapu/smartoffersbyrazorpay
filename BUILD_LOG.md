@@ -102,6 +102,21 @@ Feedback: Ray assumed numbers (4x, 30%, ₹50,000 chips), said "I couldn't run t
 
 - Part B (screens, ~1.5 h): Setup card shows every input's typical range for stores this size with "Use typical", a Yours / Typical, accepted / Not confirmed marker, and new editable minimum return and max discount. The plan lists unconfirmed inputs ("Use these typical values" / "Enter my own") and keeps Approve disabled until each is confirmed. Edit in the chat plan card now opens the inputs inline (it was an anchor to a card that only exists on the Setup & plan page). New cards on Setup & plan: Recommended offers not on your menu (engine-scored, "Add to my menu" makes a draft) and Trade-offs you choose (grow more / earn less with "Use this", and the margin squeeze). "Waiting on you" items now open and scroll to the exact review item. Browser QA: 40 checks pass at 1366 and 390 px.
 
+- Part C (Ray, ~2.5 h):
+  - **Live tools.**
+    - `simulate_plan` takes per-group overrides, menu changes, max discount, minimum return and growth, and returns a scenario name.
+    - New tools: `get_tradeoffs`, `get_recommended_offers`, `get_setup_benchmarks`, `request_resume`.
+    - `draft_settings_change` covers menu, max discount, minimum return, festive rule and growth.
+    - System-prompt rules 12–15: never assume numbers; offer only what the tools can do and do it on "yes"; every scenario is a card; which tool to use for growth, squeeze and offers.
+  - **Cards.** Every simulate_plan call becomes a card; several become one comparison table in call order (the ₹33,062 vs ₹94,665 mismatch).
+  - **Demo mode.**
+    - A pure conversation core (`converse.ts`, also used by the tests).
+    - Follow-ups act on "yes", "go with that", "draft that", "what about 35%?", "why?" and "give them…".
+    - Typos and Hinglish are understood.
+    - The setup asks every input with typical values and offers "use typical for the rest".
+    - Typical values are flagged in every answer that uses them; chips depend on the store's state.
+  - **Checks.** 250 conversations × 6 states run as a test (`scenarios/conversations.test.ts`) with 14 invariants; 0 failures (588 before). Two transcript reviews by a separate agent were turned into those invariants. Tests 227 passing; build passes.
+
 <!-- Claude Code adds unclear spec points here with the option it chose. -->
 - v3: "don't assume, ask" vs a demo that opens with numbers already filled. Chose: keep the starting values but label them as typical values for stores this size (computed from the synthetic network), require the merchant to confirm or change each input before Approve, and calibrate the synthetic band so its medians equal the starting values (₹500 keep, ₹1,00,000 budget), documented in `network.ts`.
 - v2 §10 defaults say COD fails 28%; the fixture says Alpha's failed-COD rate is 22% (and the 81% kept rate uses it). Chose: the fixture's 22% everywhere. At 22% a blanket ₹50 prepaid discount loses in all 6 groups; the insight copy is computed and says so.

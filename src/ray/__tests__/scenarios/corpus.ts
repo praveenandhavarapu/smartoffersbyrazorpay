@@ -116,4 +116,21 @@ export const SCENARIOS: Scenario[] = [
   { id: 'F28', cat: 'followup', turns: ['What do stores like mine run?', 'yes please'] },
   { id: 'F29', cat: 'followup', turns: ['Set up Smart Offers', '₹1,00,000', 'I don\'t know', 'typical', 'Most profit', 'Yes'] },
   { id: 'F30', cat: 'followup', turns: ['what if I want more new customers', 'how much profit would I give up?'] },
+  // From the transcript review: approvals by chat, follow-ups after drafts and scenarios, corrections in setup.
+  { id: 'F31', cat: 'followup', turns: ['what about 2.5x', 'yes'] },
+  { id: 'F32', cat: 'followup', turns: ['Show my payments for the last 7 days', 'what about yesterday'] },
+  { id: 'F33', cat: 'followup', turns: ['Why do lapsed shoppers get ₹100 off?', 'yes'] },
+  { id: 'F34', cat: 'followup', turns: ['Set up Smart Offers', '₹1,00,000', '₹950', '₹400', 'Most new customers', 'give up ₹6,000', 'keep these', 'break-even', 'yes'] },
+  { id: 'F35', cat: 'followup', turns: ['set up smart offers', 'typical', 'typical', 'most profit', 'typical', 'typical', 'yes'] },
+  { id: 'F36', cat: 'followup', turns: ['pause returning', 'resume'] },
+  { id: 'F37', cat: 'followup', turns: ['What other offers should I try?', 'Add ₹150 off to my menu', 'approve it'] },
+  { id: 'F38', cat: 'followup', turns: ['my margins are getting squeezed, what happens?', 'what about 45%?'] },
+  { id: 'F39', cat: 'followup', turns: ['I want more new customers', 'give up ₹10,000', 'yes'] },
+  { id: 'F40', cat: 'followup', turns: ['What if my budget is ₹50,000?', 'no thanks'], expect: { helpOk: true } },
+  ...one('review', 'V', [
+    'is ALPHA10 worth keeping?', 'what % of my discount went to returning buyers', 'whats my break even', 'can you approve it for me',
+    'turn off the festive rule', 'add free shipping on 999+ to my menu', 'remove ₹200 off from my menu', 'set my minimum return to 3x',
+    'make my max discount ₹200', 'give up ₹8,000 for more new customers', 'draft the growth option that gives up ₹6,000 a month',
+    'what if returning customers get ₹100 off?', 'what if lapsed get free shipping?', 'what if I add ₹150 off?', 'how many orders used ALPHA10',
+  ]),
 ];

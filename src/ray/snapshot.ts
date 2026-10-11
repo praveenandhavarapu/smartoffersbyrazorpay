@@ -12,14 +12,15 @@ import { answer, brainSummary } from '../engine/discountBrain';
 import { blanketPrepaid } from '../engine/paymentAware';
 import { pendingActions } from '../state/derived';
 import { FEATURES } from '../config/features';
-import type { Settings } from '../state/store';
+import { INPUT_LABEL, type Settings } from '../state/store';
+import { inputValue, pendingInputs } from '../state/inputs';
 import type { RayCtx } from './tools';
 
 const M = (x: number) => roundHalfEven(x);
 const R = (x: number) => roundHalfEven(x, 2);
 const O = (x: number) => roundHalfEven(x, 1);
 const cpo = (spend: number, orders: number) => { const c = costPerExtraOrder(spend, orders); return c === null ? null : M(c); };
-const settingsView = (s: Settings) => ({ budget: s.budget, keep_per_1000: s.keepPer1000, margin_pct: s.keepPer1000 / 10, goal: GOAL_LABEL[s.goal], offer_menu: s.allowedOffers.map(offerLabel), festive_window: s.festiveWindow, max_discount: s.maxDiscountInr });
+const settingsView = (s: Settings) => ({ budget: s.budget, keep_per_1000: s.keepPer1000, margin_pct: s.keepPer1000 / 10, goal: GOAL_LABEL[s.goal], offer_menu: s.allowedOffers.map(offerLabel), festive_window: s.festiveWindow, max_discount: s.maxDiscountInr, min_return: s.minReturn ? `${s.minReturn}x` : 'break-even', growth_trade_off: s.growth ? `give up up to ₹${s.growth.giveUpInr} a month for more ${s.growth.metric === 'orders' ? 'orders' : 'new customers'}` : null });
 
 export function engineSnapshot(ctx: RayCtx) {
   const d = ctx.derived;
@@ -44,6 +45,7 @@ export function engineSnapshot(ctx: RayCtx) {
     approved_settings: ctx.approved ? settingsView(d.liveSettings) : null,
     draft_settings: d.hasDraft || !ctx.approved ? settingsView(ctx.settings) : null,
     draft_diff_not_live: d.draftDiff,
+    inputs_not_confirmed: pendingInputs(ctx.approved, ctx.confirmed ?? {}).map((k) => ({ input: INPUT_LABEL[k], value_in_use: inputValue(k, ctx.settings, d.draftBreakEven), note: 'typical for stores this size; ask the merchant to confirm or give theirs' })),
     plan: {
       offers: Object.fromEntries(d.live.rows.map((r) => [groupLabel(r.group), offerLabel(r.offer)])),
       spend_month: M(d.live.spend), budget: d.liveSettings.budget, profit_after_returns_month: M(d.live.profit), return_after_returns_x: R(d.live.ret),

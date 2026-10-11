@@ -15,6 +15,9 @@ import { OfferChip, shortGroup } from './bits';
 import { PlanCard } from './PlanCard';
 import { ApprovedCard, CreatorsCard, DailyCard, PaymentsCard, PaymentsListCard, RefundsCard, ResultsCard, SettlementsCard, WasteCard } from './RayCards';
 import { FEATURES } from '../../config/features';
+import { TradeoffCard } from './Tradeoffs';
+import { RecommendCard } from './Recommend';
+import { SetupCard } from './SetupCard';
 
 /** Live/Demo switch. Live is disabled (with the reason) when the function has no key or isn't deployed. */
 export function ModeToggle() {
@@ -52,9 +55,33 @@ function SimCard({ title, sim }: Extract<RayCard, { kind: 'sim' }>) {
   );
 }
 
+/** v3: every scenario Ray ran, side by side, so the text and the card always describe the same plans. */
+function ScenariosCard({ items }: Extract<RayCard, { kind: 'scenarios' }>) {
+  const groups = items[0]?.sim.rows ?? [];
+  return (
+    <div className="plan mini scen">
+      <div className="plan-head"><div className="plan-title">{items.length} scenarios compared</div><span className="pill grey">Preview · not applied</span></div>
+      <div className="tbl-wrap">
+        <table className="dtable compact scen-table">
+          <thead><tr><th>Scenario</th>{items.map((x, i) => <th key={i}>{i + 1}. {x.title}</th>)}</tr></thead>
+          <tbody>
+            {groups.map((g) => <tr key={g.group}><td>{shortGroup(g.label)}</td>{items.map((x, i) => <td key={i}><OfferChip offer={x.sim.rows.find((r) => r.group === g.group)!.offer} /></td>)}</tr>)}
+            <tr><td><b>Spend</b></td>{items.map((x, i) => <td key={i}>{inr(x.sim.spend)}</td>)}</tr>
+            <tr><td><b>Return after returns</b></td>{items.map((x, i) => <td key={i}>{x.sim.spend ? xr(x.sim.return_x) : '—'}</td>)}</tr>
+            <tr><td><b>Profit / month</b></td>{items.map((x, i) => <td key={i}><b className={x.sim.profit < 0 ? 'bad' : ''}>{inrSigned(x.sim.profit)}</b></td>)}</tr>
+            <tr><td><b>Orders vs today</b></td>{items.map((x, i) => <td key={i}>{pctSigned(x.sim.orders_change_pct)}</td>)}</tr>
+            <tr><td><b>New customers / month</b></td>{items.map((x, i) => <td key={i}>{num(x.sim.new_customers_month)}</td>)}</tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export function DraftCard({ draft }: { draft: Draft }) {
   const applyOverride = useStore((s) => s.applyOverride);
   const kill = useStore((s) => s.kill);
+  const resume = useStore((s) => s.resume);
   const setSettings = useStore((s) => s.setSettings);
   const approveChanges = useStore((s) => s.approveChanges);
   const [state, setState] = useState<'open' | 'done' | 'dismissed'>('open');
@@ -63,6 +90,7 @@ export function DraftCard({ draft }: { draft: Draft }) {
   const approve = () => {
     if (draft.type === 'override') applyOverride(draft.group, draft.offer, draft.from, `${OFFER_BY_ID[draft.offer].label} (${inrSigned(draft.profit)} / month)`);
     else if (draft.type === 'pause') kill();
+    else if (draft.type === 'resume') resume();
     else {
       setSettings(draft.patch);
       // Ray's card is the merchant's explicit approval: once live, the change goes through Approve changes (logged with its summary).
@@ -79,11 +107,12 @@ export function DraftCard({ draft }: { draft: Draft }) {
         <p>{draft.groupLabel}: <OfferChip offer={draft.from} muted /> → <OfferChip offer={draft.offer} />. Cost {inr(draft.spend)} / month for about {num(draft.extraOrders)} extra orders ({xr(draft.ret)}{FEATURES.netReturns ? ' after returns' : ''}): <b className={draft.profit < 0 ? 'bad' : 'good'}>{inrSigned(draft.profit)} / month</b>{draft.vsNow ? <> ({inrSigned(draft.vsNow.profit)} vs now)</> : null}.</p>
       ))}
       {draft.type === 'pause' && <p>Pause {draft.scope === 'all' ? 'all Smart Offers' : draft.scope}. Shoppers see the store default checkout.</p>}
+      {draft.type === 'resume' && <p>Resume Smart Offers: the approved plan serves again from the next checkout; the holdout stays on.</p>}
       {draft.type === 'settings' && (FEATURES.rayV2 && draft.summary.includes('→')
         ? <><p className="small">Changes (draft, not live until you approve):</p><ul className="small">{draft.summary.split('; ').map((x) => <li key={x}>{x}</li>)}</ul></>
         : <p>{draft.summary}</p>)}
       <div className="btns">
-        <button className="btn primary sm" onClick={approve}>{draft.type === 'pause' ? 'Confirm pause' : 'Approve'}</button>
+        <button className="btn primary sm" onClick={approve}>{draft.type === 'pause' ? 'Confirm pause' : draft.type === 'resume' ? 'Confirm resume' : 'Approve'}</button>
         <button className="btn secondary sm" onClick={() => setState('dismissed')}>Cancel</button>
       </div>
     </div>
@@ -104,8 +133,12 @@ function CurrentAccuracy() {
 function CardView({ card, onAsk }: { card: RayCard; onAsk: (q: string) => void }) {
   const approved = useStore((s) => s.approved);
   switch (card.kind) {
-    case 'plan_live': return <><PlanCard onAsk={onAsk} />{approved && <ApprovedCard />}</>;
+    case 'plan_live': return <><PlanCard onAsk={onAsk} inlineSetup />{approved && <ApprovedCard />}</>;
     case 'sim': return <SimCard {...card} />;
+    case 'scenarios': return <ScenariosCard {...card} />;
+    case 'tradeoff': return <TradeoffCard initial={card.view} />;
+    case 'recommendations': return <RecommendCard limit={4} />;
+    case 'inputs': return <SetupCard embedded />;
     case 'draft': return <DraftCard draft={card.draft} />;
     case 'waste': return <WasteCard onFix={() => onAsk('Set up Smart Offers')} />;
     case 'payments': return <PaymentsCard d={card.data} />;

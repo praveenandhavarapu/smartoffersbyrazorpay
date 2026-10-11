@@ -36,8 +36,9 @@ export function ledgerView(m: Moment, instant: InstantSettlement[] = []): Ledger
 export type Range = { from: number; to: number };
 
 /** "last 5 days" etc., ending at the demo date. */
-export function lastDays(v: LedgerView, days: number): Range {
-  const endDay = istDay(v.now);
+/** The `days` days ending `endDaysAgo` days before today (0 = ending today; 1 = ending yesterday). */
+export function lastDays(v: LedgerView, days: number, endDaysAgo = 0): Range {
+  const endDay = istDay(v.now) - Math.max(0, Math.round(endDaysAgo));
   return { from: dayStart(endDay - days + 1), to: dayStart(endDay + 1) };
 }
 

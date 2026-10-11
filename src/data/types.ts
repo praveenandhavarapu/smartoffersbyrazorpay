@@ -16,6 +16,8 @@ export type Goal = 'most_profit' | 'new_customers' | 'orders_steady';
 
 export const GROUP_IDS: readonly GroupId[] = ['new_ads_small', 'new_ads_big', 'new_creator', 'new_organic', 'returning', 'lapsed'];
 export const OFFER_IDS: readonly OfferId[] = ['none', 'free_shipping', 'flat_100', 'flat_200'];
+/** v3: every offer the engine can price (standard ladder + playbook variants). */
+export const ALL_OFFER_IDS: readonly OfferId[] = [...OFFER_IDS, 'flat_150', 'free_shipping_999', 'free_shipping_prepaid'];
 export const NEW_GROUPS: readonly GroupId[] = ['new_ads_small', 'new_ads_big', 'new_creator', 'new_organic'];
 
 // ---------- raw, Razorpay-shaped ----------

@@ -119,9 +119,12 @@ describe('Ray red-team (demo mode, SPEC 8.5)', () => {
   });
 
   it('unknown messages get the help list; demo mode never invents numbers', () => {
-    const r = route('hello there', ctx);
+    const r = route('qwerty asdf', ctx);
     expect(r.intent).toBe('help');
     expect(r.text).not.toMatch(/\d/);
+    const hi = route('hello there', ctx);
+    expect(hi.intent).toBe('greeting');
+    expect(hi.text).not.toMatch(/\d/);
   });
 
   it('core intents quote engine numbers', () => {
@@ -156,15 +159,16 @@ describe('Ray red-team (demo mode, SPEC 8.5)', () => {
 
 describe('guided setup', () => {
   it('parses answers and rejects nonsense', () => {
-    expect(parseAnswer('budget', '₹1,00,000')).toEqual({ ok: true, patch: { budget: 100000 } });
-    expect(parseAnswer('budget', '1 lakh')).toEqual({ ok: true, patch: { budget: 100000 } });
+    // v3: every answer records that the merchant gave it.
+    expect(parseAnswer('budget', '₹1,00,000')).toEqual({ ok: true, patch: { budget: 100000 }, source: 'merchant' });
+    expect(parseAnswer('budget', '1 lakh')).toEqual({ ok: true, patch: { budget: 100000 }, source: 'merchant' });
     expect(parseAnswer('budget', '50 crore').ok).toBe(false);
-    expect(parseAnswer('margin', '₹400')).toEqual({ ok: true, patch: { keepPer1000: 400 } });
-    expect(parseAnswer('margin', '40%')).toEqual({ ok: true, patch: { keepPer1000: 400 } });
+    expect(parseAnswer('margin', '₹400')).toMatchObject({ ok: true, patch: { keepPer1000: 400 }, source: 'merchant' });
+    expect(parseAnswer('margin', '40%')).toMatchObject({ ok: true, patch: { keepPer1000: 400 }, source: 'merchant' });
     const hi = parseAnswer('margin', '70%');
     expect(hi.ok && hi.note).toMatch(/₹400–600/);
-    expect(parseAnswer('goal', 'Most new customers')).toEqual({ ok: true, patch: { goal: 'new_customers' } });
-    expect(parseAnswer('rules', 'Yes')).toEqual({ ok: true, patch: { festiveWindow: true } });
+    expect(parseAnswer('goal', 'Most new customers')).toEqual({ ok: true, patch: { goal: 'new_customers' }, source: 'merchant' });
+    expect(parseAnswer('rules', 'Yes')).toEqual({ ok: true, patch: { festiveWindow: true }, source: 'merchant' });
     expect(parseAnswer('rules', 'maybe').ok).toBe(false);
   });
 });
