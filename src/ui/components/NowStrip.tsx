@@ -30,8 +30,8 @@ export function useNowNext() {
     const ev = L?.events.find((e) => e.day === dayOf(derived.nextReview!) && e.needsApproval && !e.decision);
     next = `Mon ${fmtDate(derived.nextReview, false)} 06:00 · weekly review${ev ? `; likely proposal: ${ev.type === 'promotion_proposed' ? `promote ${offerLabel('flat_150')}` : ev.type === 'promotion_expected' ? 'promote the organic challenger' : 'a playbook test'}` : '; re-plan with this week\'s results'}`;
   } else if (approved && now === 0) next = `${fmtDate(pilotDayDate(1), false)} 06:00 · first run: publishes ${TABLE_NAME}`;
-  const waiting = pendingActions(derived.reviews, decisions).map((i) => ({ id: i.id, label: i.title, to: '/studio/smart-offers?tab=reviews' }));
-  if (derived.hasDraft) waiting.push({ id: 'draft', label: 'Plan changes (draft, not live)', to: '/offers/smart?tab=plan' });
+  const waiting = pendingActions(derived.reviews, decisions).map((i) => ({ id: i.id, label: i.title, to: `/studio/smart-offers?tab=reviews&item=${encodeURIComponent(i.id)}` }));
+  if (derived.hasDraft) waiting.push({ id: 'draft', label: 'Plan changes (draft, not live)', to: '/offers/smart?tab=plan&focus=plan-card' });
   return { done, next, waiting };
 }
 

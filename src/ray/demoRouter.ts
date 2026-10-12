@@ -2,17 +2,25 @@
  * Demo-mode Ray: keyword/regex intent rules -> the same tools as live mode -> templates.
  * Never invents a number: every figure in a reply comes from a tool result.
  */
-import type { GroupId, OfferId } from '../data/types';
+import type { GroupId } from '../data/types';
 import { tools, type Draft, type RayCtx, type ToolCall } from './tools';
+import { PLAN_CHIPS, routeV3 } from './demoV3';
 import { T } from './templates';
 import { MAX_DISCOUNT_PER_ORDER } from '../engine/guardrails';
-import { DEFAULT_KEEP_PER_1000 } from '../engine/net';
 import { FEATURES } from '../config/features';
+import { groupLabel } from '../lib/labels';
+import { inr, inrSigned, xr } from '../lib/format';
+import { GROUP_WORD, groupIn, normalize, offerIn, parseAmount, parseDays } from './parse';
 
 export type QuickReply = { label: string; message: string };
 export type RayCard =
   | { kind: 'plan_live' }
   | { kind: 'sim'; title: string; sim: ReturnType<typeof tools.simulate_plan> }
+  /** v3: several scenarios side by side, in the order Ray ran them (titles say what changed). */
+  | { kind: 'scenarios'; items: { title: string; sim: ReturnType<typeof tools.simulate_plan> }[] }
+  | { kind: 'tradeoff'; view: 'growth' | 'margin' }
+  | { kind: 'recommendations' }
+  | { kind: 'inputs' }
   | { kind: 'draft'; draft: Draft }
   | { kind: 'help'; items: QuickReply[] }
   | { kind: 'waste' }
@@ -25,23 +33,15 @@ export type RayCard =
   | { kind: 'creators' }
   | { kind: 'opportunities' } | { kind: 'why_ai' } | { kind: 'review' } | { kind: 'accuracy' } | { kind: 'decision' } | { kind: 'impact' } | { kind: 'experiments' };
 
-export type RayReply = { intent: string; text: string; card?: RayCard; quick?: QuickReply[]; toolCalls: ToolCall[]; refused?: boolean; startSetup?: boolean };
+export type RayReply = {
+  intent: string; text: string; card?: RayCard; quick?: QuickReply[]; toolCalls: ToolCall[]; refused?: boolean; startSetup?: boolean;
+  /** v3: the step this reply offers; "yes" / "go ahead" runs it. */
+  next?: QuickReply;
+  /** v3: context for follow-ups ("what about 35%?", "why?", "give them ₹100 off"). */
+  about?: { kind?: 'margin' | 'budget' | 'floor' | 'payments' | 'settlements' | 'refunds' | 'daily'; group?: GroupId; days?: number };
+};
 
-/** "last 5 days", "this week", "last month", "6 months" -> days (ending today). */
-export function parseDays(t: string, today: Date): number | null {
-  const n = t.match(/\b(?:last|past|previous)?\s*(\d{1,3})\s*days?\b/);
-  if (n) return Number(n[1]);
-  const m = t.match(/\b(\d{1,2}|six|three)\s*months?\b/);
-  if (m) return Math.round((m[1] === 'six' ? 6 : m[1] === 'three' ? 3 : Number(m[1])) * 30.5);
-  if (/\btoday\b/.test(t)) return 1;
-  if (/\byesterday\b/.test(t)) return 2;
-  if (/\b(this|last|past) week\b/.test(t)) return 7;
-  if (/\bthis month\b/.test(t)) return today.getUTCDate();
-  if (/\b(last|past|previous) month\b|\b30 days\b/.test(t)) return 30;
-  if (/\bquarter\b/.test(t)) return 91;
-  if (/\b(half|six)[- ]year|\ball time\b/.test(t)) return 183;
-  return null;
-}
+export { parseAmount, parseDays } from './parse';
 
 export const FOLLOW_UPS: Record<string, QuickReply[]> = {
   payments: [
@@ -66,12 +66,8 @@ export const FOLLOW_UPS: Record<string, QuickReply[]> = {
     { label: 'Are creator codes leaking?', message: 'Are creator codes leaking?' },
     { label: 'What do similar stores see?', message: 'What do similar stores typically see?' },
   ],
-  plan: [
-    { label: 'What if my margin is 30%?', message: 'What if my margin is 30%?' },
-    { label: 'I want 4x return', message: 'I want 4x return' },
-    { label: 'Try a ₹50,000 budget', message: 'What if my budget is ₹50,000?' },
-    { label: 'Why no offer for returning buyers?', message: 'Why does returning get no offer?' },
-  ],
+  // v3: no made-up targets (30%, 4x, ₹50,000): each chip asks about the merchant's own numbers.
+  get plan() { return [...PLAN_CHIPS, { label: 'Why no offer for returning buyers?', message: 'Why does returning get no offer?' }]; },
   results: [
     ...(FEATURES.rayV2 ? [{ label: 'What is the agent testing right now?', message: 'What is the agent testing right now?' }, { label: 'Should the abandoned-cart agent offer discounts?', message: 'Should the abandoned-cart agent offer discounts?' }] : []),
     { label: 'What changed this week?', message: 'What changed this week?' },
@@ -79,43 +75,11 @@ export const FOLLOW_UPS: Record<string, QuickReply[]> = {
     { label: 'Should I keep Smart Offers?', message: 'Should I keep Smart Offers after the pilot?' },
     { label: 'What should I try next?', message: 'What should I try next?' },
     { label: 'Why no offer for returning buyers?', message: 'Why does returning get no offer?' },
-    { label: 'Give returning customers ₹100 off', message: 'Give returning customers ₹100 off' },
     { label: 'How much will I make next month?', message: 'How much will I make next month exactly?' },
   ],
 };
 
 const BRANDS = ['snitch', 'bewakoof', 'souled store', 'the souled store', 'rare rabbit', 'zara', 'h&m', 'uniqlo', 'nykaa', 'myntra', 'ajio', 'westside', 'libas', 'fabindia', 'biba', 'urbanic', 'roadster', 'powerlook', 'bonkers', 'wrogn', 'mokobara', 'boat', 'mamaearth', 'sugar', 'lenskart', 'campus', 'house of masaba', 'jaypore', 'tjori', 'virgio', 'freakins', 'comet', 'flipkart', 'amazon', 'meesho'];
-
-const GROUP_WORDS: [RegExp, GroupId][] = [
-  [/\b(returning|repeat|loyal|existing)\b/, 'returning'],
-  [/\blapsed\b|\bwin[- ]?back\b|\bdormant\b/, 'lapsed'],
-  [/\borganic\b|\bdirect\b|\bsearch\b/, 'new_organic'],
-  [/\bcreator\b|\binfluencer\b/, 'new_creator'],
-  [/\bbig (cart|basket)s?\b|\b(1,?500|1\.5k)\+/, 'new_ads_big'],
-  [/\b(ads?|instagram|meta|facebook|paid)\b/, 'new_ads_small'],
-];
-
-function groupIn(t: string): GroupId | null {
-  for (const [re, g] of GROUP_WORDS) if (re.test(t)) return g;
-  return null;
-}
-
-function offerIn(t: string): OfferId | null {
-  if (/free shipping|free delivery/.test(t)) return 'free_shipping';
-  if (/(₹|rs\.?\s?|inr\s?)?200( rupees)? off|₹\s?200\b/.test(t)) return 'flat_200';
-  if (/(₹|rs\.?\s?|inr\s?)?100( rupees)? off|₹\s?100\b/.test(t)) return 'flat_100';
-  if (/\bno offer\b|\bnothing\b|\bstop offers? for\b/.test(t)) return 'none';
-  return null;
-}
-
-/** "₹50,000", "50k", "1 lakh", "1.5L" -> rupees */
-export function parseAmount(t: string): number | null {
-  const m = t.match(/(?:₹|rs\.?|inr)?\s*(\d[\d,]*(?:\.\d+)?)\s*(k|thousand|l|lakh|lac|lakhs)?\b/i);
-  if (!m) return null;
-  const v = parseFloat(m[1].replace(/,/g, ''));
-  const u = (m[2] ?? '').toLowerCase();
-  return u === 'k' || u === 'thousand' ? v * 1000 : u.startsWith('l') ? v * 100000 : v;
-}
 
 /** v2: what-if cards are scenarios, never applied ("Scenario: margin 30% (not applied)"). */
 const scenarioTitle = (what: string) => (FEATURES.rayV2 ? `Scenario: ${what} (not applied)` : `${what.replace(/^margin (.*)$/, '$1 margin')} (preview)`);
@@ -136,14 +100,14 @@ const HELP: QuickReply[] = [
   { label: 'Settlements', message: 'Show my settlements for the last 7 days' },
   { label: 'Offers & coupons', message: 'How are my offers and coupons doing?' },
   { label: 'Set up Smart Offers', message: 'Set up Smart Offers' },
-  { label: 'What if margin is 30%?', message: 'What if my margin is 30%?' },
-  { label: 'Try a ₹50,000 budget', message: 'What if my budget is ₹50,000?' },
+  { label: 'My numbers vs stores my size', message: 'What are my numbers?' },
+  { label: 'Growth vs profit', message: 'I want more new customers' },
   { label: 'How are results?', message: 'How are the results so far?' },
   { label: 'Creator codes', message: 'Are creator codes leaking?' },
 ];
 
 export function route(message: string, ctx: RayCtx): RayReply {
-  const t = message.toLowerCase().replace(/\s+/g, ' ').trim();
+  const t = normalize(message);
   const calls: ToolCall[] = [];
   const call = <R,>(name: ToolCall['name'], args: Record<string, unknown>, fn: () => R): R => {
     const result = fn();
@@ -173,22 +137,23 @@ export function route(message: string, ctx: RayCtx): RayReply {
   // 3. Banned signals.
   const banned = t.match(/\b(iphone|android|ios|device|os|gender|female|male|women|men|income|salary|rich|location|city|pincode|religion|caste)\b/);
   if (banned && /\b(target|give|offer|discount|bigger|more|segment|only)\b/.test(t)) {
-    return reply('refuse_banned_signal', T.refuseBanned(banned[1] === 'iphone' || banned[1] === 'android' || banned[1] === 'ios' || banned[1] === 'os' ? 'device or OS' : banned[1]), { refused: true });
+    const w = banned[1];
+    return reply('refuse_banned_signal', T.refuseBanned(['iphone', 'android', 'ios', 'os', 'device'].includes(w) ? 'device or OS' : ['gender', 'female', 'male', 'women', 'men'].includes(w) ? 'gender' : ['location', 'city', 'pincode'].includes(w) ? 'location' : ['income', 'salary', 'rich'].includes(w) ? 'income' : w), { refused: true, quick: [{ label: 'What groups can I target?', message: 'Show me the most-profit plan' }] });
   }
 
   // 4a. v2: named guardrails (uncapped budget, messaging shoppers, price changes).
   if (FEATURES.rayV2) {
-    if (/\b(unlimited|uncapped|no) budget\b|\bremove (the )?budget (cap|limit)\b|\bwithout (a )?budget\b/.test(t)) return reply('refuse_guardrail', T.guardrail('monthly budget hard stop', 'Every plan has a budget between ₹5,000 and ₹10,00,000 a month, so spend can never run away.'), { refused: true });
-    if (/\b(send|message|text|sms|whatsapp|email|notify|ping)\b.*\b(shoppers?|customers?|buyers?)\b/.test(t) && !/\bsummary\b/.test(t)) return reply('refuse_guardrail', T.guardrail('no shopper messaging', 'Smart Offers only decides what checkout shows; it never messages shoppers.'), { refused: true });
-    if (/\b(raise|increase|lower|reduce|change|cut|hike)\b.*\bprices?\b|\bprice (change|hike|cut)\b/.test(t)) return reply('refuse_guardrail', T.guardrail('no price changes', 'It never changes product prices; it only chooses an approved offer, or none, per shopper group.'), { refused: true });
+    if (/\b(unlimited|uncapped|no) budget\b|\bremove (the )?budget (cap|limit)\b|\bwithout (a )?budget\b/.test(t)) return reply('refuse_guardrail', T.guardrail('monthly budget hard stop', 'Every plan has a budget between ₹5,000 and ₹10,00,000 a month, so spend can never run away.'), { refused: true, quick: [{ label: 'Show my guardrails', message: 'What are my guardrails?' }] });
+    if (/\b(send|message|text|sms|whatsapp|email|notify|ping)\b.*\b(shoppers?|customers?|buyers?)\b/.test(t) && !/\bsummary\b/.test(t)) return reply('refuse_guardrail', T.guardrail('no shopper messaging', 'Smart Offers only decides what checkout shows; it never messages shoppers.'), { refused: true, quick: [{ label: 'Show my guardrails', message: 'What are my guardrails?' }] });
+    if (/\b(raise|increase|lower|reduce|change|cut|hike)\b.*\bprices?\b|\bprice (change|hike|cut)\b/.test(t)) return reply('refuse_guardrail', T.guardrail('no price changes', 'It never changes product prices; it only chooses an approved offer, or none, per shopper group.'), { refused: true, quick: [{ label: 'Show my guardrails', message: 'What are my guardrails?' }] });
     const big = t.match(/₹\s?(\d[\d,]*)\s*off/);
-    if (big && Number(big[1].replace(/,/g, '')) > MAX_DISCOUNT_PER_ORDER) return reply('refuse_guardrail', T.guardrail(`max discount ₹${MAX_DISCOUNT_PER_ORDER} per order`, 'Offers can never exceed your max discount per order.'), { refused: true });
+    if (big && Number(big[1].replace(/,/g, '')) > MAX_DISCOUNT_PER_ORDER) return reply('refuse_guardrail', T.guardrail(`max discount ₹${MAX_DISCOUNT_PER_ORDER} per order`, 'Offers can never exceed your max discount per order.'), { refused: true, quick: [{ label: 'Show my guardrails', message: 'What are my guardrails?' }] });
   }
 
   // 4. Rule-breaking / injection.
   const pctOff = t.match(/(\d{1,3})\s?% off/);
   if (/ignore (all |your |previous |the )?(rules|instructions|guardrails)|jailbreak|bypass|no (cap|limit)s?\b/.test(t) || (pctOff && Number(pctOff[1]) >= 25) || /\beveryone\b.*\boff\b/.test(t)) {
-    return reply('refuse_injection', T.refuseInjection(MAX_DISCOUNT_PER_ORDER), { refused: true });
+    return reply('refuse_injection', T.refuseInjection(MAX_DISCOUNT_PER_ORDER), { refused: true, quick: [{ label: 'Show my guardrails', message: 'What are my guardrails?' }, { label: 'Show the plan', message: 'Show me the most-profit plan' }] });
   }
 
   const days = parseDays(t, new Date(ctx.ledger.now * 1000));
@@ -196,7 +161,11 @@ export function route(message: string, ctx: RayCtx): RayReply {
 
   // Account and support.
   if (/^(manage (my )?account|account settings?)\b/.test(t)) return reply('account', 'Account & Settings has your business profile, settlement schedule (next day or instant), Ray mode (Live or Demo), Smart Offers guardrails and the audit log. Open it from the left menu.', { quick: HELP });
-  if (/^(support|help|help & support)$/.test(t)) return reply('help', T.help(), { card: { kind: 'help', items: HELP } });
+  if (/^(help)$/.test(t)) return reply('help', T.help(), { card: { kind: 'help', items: HELP } });
+
+  // v3: your numbers, trade-offs, offers beyond the menu, menu/minimum-return changes, approve/resume.
+  const v3 = routeV3(t, ctx, call, reply);
+  if (v3) return v3;
 
   // v2: answers over one engine snapshot.
   if (FEATURES.rayV2) {
@@ -204,7 +173,7 @@ export function route(message: string, ctx: RayCtx): RayReply {
     if (/\bcost (me )?per (extra )?order\b|\bper order\b.*\balpha10\b|\balpha10\b.*\bper order\b/.test(t)) return reply('alpha10_per_order', T.a10PerOrder(snap()), { card: { kind: 'waste' }, quick: FOLLOW_UPS.offers });
     if (/\b(agent )?testing\b|\bchallengers?\b|\bexperiments? (running|right now)\b|\bwhat is the agent (doing|testing)\b/.test(t)) return reply('testing', T.testing(snap()), { quick: FOLLOW_UPS.results });
     if (/\babandon(ed)?[- ]?cart\b|\bcart abandonment\b|\brecovery agent\b|\bother agents?\b/.test(t)) return reply('cart_agent', T.cartAgent(snap()), { quick: FOLLOW_UPS.results });
-    if (/\bstores like (mine|me|ours)\b|\bwhat do (similar |other )?stores (like mine )?run\b|\bplaybook\b/.test(t)) return reply('stores_like_mine', T.storesLikeMine(snap()), { quick: FOLLOW_UPS.offers });
+    if (/\bstores like (mine|me|ours)\b|\bwhat do (similar |other )?stores (like mine )?run\b|\bplaybook\b|\bworked (at|for) (similar|other) stores\b/.test(t)) return reply('stores_like_mine', T.storesLikeMine(snap()), { quick: FOLLOW_UPS.offers });
     // Budget, margin and goal CHANGES become a draft with a diff (what-ifs stay scenarios, below).
     const isWhatIf = /\bwhat if\b|\bscenario\b|\btry\b|\bpreview\b|\bhow about\b|\bwhat about\b/.test(t);
     const isChange = /\b(set|change|make|update|switch|raise|lower|increase|decrease|cut|use|move)\b.*\b(budget|margin|goal|keep)\b|\bmy (real )?margin is\b|\bi keep ₹?\s?\d+/.test(t);
@@ -214,13 +183,20 @@ export function route(message: string, ctx: RayCtx): RayReply {
       const keepM = t.match(/keep ₹?\s?(\d+)/);
       const keep = /\bmargin\b|\bkeep\b/.test(t) ? (pm ? Math.round(parseFloat(pm[1]) * 10) : keepM ? Number(keepM[1]) : null) : null;
       const goal = /new customers?/.test(t) ? 'new_customers' : /steady|orders? steady/.test(t) ? 'orders_steady' : /most profit/.test(t) ? 'most_profit' : undefined;
-      const args = { ...(amt && amt >= 1000 ? { budget: Math.min(Math.max(amt, 5000), 1000000) } : {}), ...(keep ? { keep_per_1000: keep } : {}), ...(goal ? { goal } : {}) } as { budget?: number; keep_per_1000?: number; goal?: 'most_profit' | 'new_customers' | 'orders_steady' };
+      const floorPct = goal === 'orders_steady' ? t.match(/(\d+(?:\.\d+)?)\s?%/) : null;
+      const args = { ...(amt && amt >= 1000 ? { budget: Math.min(Math.max(amt, 5000), 1000000) } : {}), ...(keep ? { keep_per_1000: keep } : {}), ...(goal ? { goal } : {}), ...(floorPct ? { orders_floor_pct: parseFloat(floorPct[1]) } : {}) } as { budget?: number; keep_per_1000?: number; goal?: 'most_profit' | 'new_customers' | 'orders_steady'; orders_floor_pct?: number };
       if (args.budget !== undefined || args.keep_per_1000 !== undefined || args.goal) {
         if (args.keep_per_1000 !== undefined && (args.keep_per_1000 < 200 || args.keep_per_1000 > 650)) {
           return reply('margin_warning', T.marginWarn(args.keep_per_1000 / 10), { card: { kind: 'draft', draft: { type: 'settings', patch: { keepPer1000: args.keep_per_1000 }, summary: `Use ${args.keep_per_1000 / 10}% margin (keep ₹${args.keep_per_1000} of ₹1,000)` } } });
         }
         const r = call('draft_settings_change', args, () => tools.draft_settings_change(ctx, args));
-        return reply('settings_draft', T.settingsDraft(r.diff, r.plan.profit, r.plan.spend), { card: { kind: 'draft', draft: r.draft } });
+        const before = ctx.approved ? ctx.derived.live : ctx.derived.draft;
+        const extra = {
+          allNone: r.plan.rows.every((x) => x.offer === 'none'),
+          budgetUnused: args.budget !== undefined && args.budget > before.settings.budget && r.plan.spend < args.budget * 0.97 ? r.plan.spend : null,
+          goalOnly: Boolean(args.goal) && args.goal !== 'most_profit' && r.diff.length <= 1,
+        };
+        return reply('settings_draft', T.settingsDraft(r.diff, r.plan.profit, r.plan.spend, extra), { card: { kind: 'draft', draft: r.draft }, ...(extra.goalOnly ? { quick: [{ label: 'Growth vs profit', message: 'I want more new customers' }] } : {}) });
       }
     }
   }
@@ -228,11 +204,11 @@ export function route(message: string, ctx: RayCtx): RayReply {
   // Lifecycle: opportunities, why AI, weekly review, accuracy, pilot decision, impact, next experiments.
   if (/\bwhy (use )?ai\b|\bwhy not (just )?a (simple |fixed )?rule\b|\bbetter than a rule\b|\bwhat does (the )?ai do\b/.test(t)) {
     const w = call('get_why_ai', {}, () => tools.get_why_ai(ctx));
-    return reply('why_ai', T.whyAi(w), { card: { kind: 'why_ai' }, quick: FOLLOW_UPS.offers });
+    return reply('why_ai', T.whyAi(w, ctx.approved), { card: { kind: 'why_ai' }, quick: FOLLOW_UPS.offers });
   }
   if (/\bopportunit|\banything (i should|to) (fix|know|do)\b|\bwhat should i (fix|look at)\b|\balerts?\b|\bnotifications?\b/.test(t)) {
     const o = call('get_opportunities', {}, () => tools.get_opportunities(ctx));
-    return reply('opportunities', T.opportunities(o), { card: { kind: 'opportunities' }, quick: FOLLOW_UPS.offers });
+    return reply('opportunities', T.opportunities(o, ctx.approved), { card: { kind: 'opportunities' }, quick: FOLLOW_UPS.offers });
   }
   if (/\bweekly review\b|\bwhat changed\b|\bthis week\b|\bmonday\b|\breview\b/.test(t) && !/\breviews? (of|for) (my )?(store|product)\b/.test(t)) {
     const r = call('get_weekly_review', {}, () => tools.get_weekly_review(ctx));
@@ -242,7 +218,7 @@ export function route(message: string, ctx: RayCtx): RayReply {
     const a = call('get_prediction_accuracy', {}, () => tools.get_prediction_accuracy(ctx));
     return reply('accuracy', T.accuracy(a, ctx.approved), { card: ctx.approved ? { kind: 'accuracy' } : undefined, quick: FOLLOW_UPS.results });
   }
-  if (/\bshould i keep\b|\bkeep smart offers\b|\bpilot (end|ends|ending|decision)\b|\bday 30\b|\bafter the pilot\b|\bworth (it|paying)\b/.test(t)) {
+  if (/\bshould i keep\b|\bkeep smart offers\b|\bpilot (end|ends|ending|decision)\b|\bday 30\b|\bafter the pilot\b|\bworth (it|paying)\b/.test(t) && !/\balpha10\b|\bcoupons?\b|\bcodes?\b/.test(t)) {
     const p = call('get_pilot_decision', {}, () => tools.get_pilot_decision(ctx));
     return reply('pilot_decision', T.pilot(p, ctx.approved), { card: ctx.approved ? { kind: 'decision' } : undefined, quick: FOLLOW_UPS.results });
   }
@@ -269,21 +245,24 @@ export function route(message: string, ctx: RayCtx): RayReply {
   }
   if (/\brefunds?\b|\bdisputes?\b|\bchargebacks?\b/.test(t)) {
     const r = call('get_refunds_and_disputes', { days: days ?? 30 }, () => tools.get_refunds_and_disputes(ctx, { days: days ?? 30 }));
-    return reply('refunds', T.refunds(r), { card: { kind: 'refunds', data: r }, quick: FOLLOW_UPS.refunds });
+    return reply('refunds', /\bdisputes?\b|\bchargebacks?\b/.test(t) ? T.disputes(r) : T.refunds(r), { card: { kind: 'refunds', data: r }, quick: FOLLOW_UPS.refunds });
   }
-  if (/\bfailed\b|\bdeclined\b|\bunsuccessful\b/.test(t) && /\bpayments?\b|\btransactions?\b/.test(t)) {
+  if (/\bfail(ed|ing|s|ures?)?\b|\bdeclined\b|\bunsuccessful\b/.test(t) && /\bpayments?\b|\btransactions?\b/.test(t)) {
     const l = call('list_payments', { status: 'failed', limit: 6 }, () => tools.list_payments(ctx, { status: 'failed', limit: 6 }));
     const s = call('get_payments_summary', { days: d }, () => tools.get_payments_summary(ctx, { days: d }));
     return reply('failed_payments', T.failed(s), { card: { kind: 'payments_list', title: 'Latest failed payments', data: l }, quick: FOLLOW_UPS.payments });
   }
-  if (/\bpayments?\b|\bcollect(ed|ions?|ing)?\b|\bhow much (money )?did i (make|get|earn)\b|\btransactions?\b|\brevenue\b|\breceived\b|\bupi\b|\bcards?\b|\bnetbanking\b|\bwallets?\b|\bsuccess rate\b/.test(t) && !/\boffers?\b|\bcoupons?\b|\balpha10\b/.test(t)) {
-    const s = call('get_payments_summary', { days: d }, () => tools.get_payments_summary(ctx, { days: d }));
-    return reply('payments', T.payments(s), { card: { kind: 'payments', data: s }, quick: FOLLOW_UPS.payments });
+  if (/\bpayments?\b|\bcollect(ed|ions?|ing)?\b|\bhow much (money )?did i (make|get|earn)\b|\btransactions?\b|\brevenue\b|\breceived\b|\bupi\b|\bcards?\b|\bnetbanking\b|\bwallets?\b|\bsuccess rate\b|\bfees?\b|\bgst\b/.test(t) && !/\boffers?\b|\bcoupons?\b|\balpha10\b/.test(t)) {
+    const yday = /\byesterday\b/.test(t);
+    const pa = yday ? { days: 1, end_days_ago: 1 } : { days: d };
+    const s = call('get_payments_summary', pa, () => tools.get_payments_summary(ctx, pa));
+    const text = /\bfees?\b|\bgst\b|\bcharges\b/.test(t) ? T.fees(s) : /\bsuccess rate\b/.test(t) ? T.successRate(s) : /\bupi\b.*\b(share|%|split|vs)\b|\b(share|split|mix)\b.*\b(upi|cards?|methods?)\b|\bcards? vs upi\b|\bupi vs cards?\b/.test(t) ? T.paymentsMix(s) : T.payments(s);
+    return reply('payments', text, { card: { kind: 'payments', data: s }, quick: FOLLOW_UPS.payments });
   }
 
   // Setup is a guided flow in the UI.
   if (/\bset ?up\b|\bget started\b|\bfix (it|this|my offers|my coupons)\b|^smart offers$|\bstart smart offers\b/.test(t) && !/\bplan\b|\bresults?\b/.test(t)) {
-    return reply('start_setup', 'Let\'s set up Smart Offers. Four quick questions, then I\'ll show you the plan. Nothing goes live until you approve it.', { startSetup: true });
+    return reply('start_setup', ctx.approved ? 'Smart Offers is already live. Let\'s go through your numbers: anything you change becomes a draft, and nothing live changes until you approve it.' : 'Let\'s set up Smart Offers. A few questions about your numbers (I show what stores your size use, but I don\'t assume anything), then the plan. Nothing goes live until you approve it.', { startSetup: true });
   }
 
   // 5. Return target ("I want 4x").
@@ -303,9 +282,10 @@ export function route(message: string, ctx: RayCtx): RayReply {
       }
     }
     const s3 = alt && want > alt ? call('simulate_plan', { floor_return: alt }, () => tools.simulate_plan(ctx, { floor_return: alt })) : null;
-    return reply('floor_pushback', T.floorPushback(want, s, s3, alt), {
+    const fb = ctx.derived.benchmark;
+    return reply('floor_pushback', T.floorPushback(want, s, s3, alt) + (fb.ok ? ` (${fb.floor.breakEvenPct}% of stores your size ask offers only to beat break-even, ${xr(s.break_even_x)} at your margin.)` : ''), {
       card: { kind: 'sim', title: scenarioTitle(`${want}x floor`), sim: s },
-      quick: [...(s3 ? [{ label: `What about ${alt}x?`, message: `What about ${alt}x?` }] : []), { label: 'Keep most profit', message: 'Show me the most-profit plan' }],
+      quick: [...(s3 ? [{ label: `What about ${alt}x?`, message: `What about ${alt}x?` }] : []), { label: `Use ${want}x anyway`, message: `Set my minimum return to ${want}x` }, { label: 'Keep most profit', message: 'Show me the most-profit plan' }],
     });
   }
 
@@ -315,11 +295,17 @@ export function route(message: string, ctx: RayCtx): RayReply {
     const keep = t.match(/keep ₹?\s?(\d+)/);
     const pct = pm ? parseFloat(pm[1]) : keep ? parseFloat(keep[1]) / 10 : null;
     if (pct !== null) {
-      if (pct < 20 || pct > 65) {
-        return reply('margin_warning', T.marginWarn(pct), {
+      const bm = ctx.derived.benchmark;
+      const typical = bm.ok ? { p25: bm.keepPer1000.p25, p75: bm.keepPer1000.p75, peers: bm.peerLabel } : undefined;
+      if ((pct < 20 || pct > 65) && !/\bwhat if\b|\bwhat about\b|\bscenario\b|\btry\b/.test(t)) {
+        return reply('margin_warning', T.marginWarn(pct, typical), {
           card: { kind: 'draft', draft: { type: 'settings', patch: { keepPer1000: Math.round(pct * 10) }, summary: `Use ${pct}% margin (keep ₹${Math.round(pct * 10)} of ₹1,000)` } },
-          quick: [{ label: `Keep ₹${DEFAULT_KEEP_PER_1000} (${DEFAULT_KEEP_PER_1000 / 10}%)`, message: 'Show me the most-profit plan' }],
+          quick: bm.ok ? [{ label: `Typical: keep ₹${bm.keepPer1000.median}`, message: `What if I keep ₹${bm.keepPer1000.median} of ₹1,000?` }] : [],
         });
+      }
+      if (pct < 20 || pct > 65) {
+        const s = call('simulate_plan', { margin_pct: pct }, () => tools.simulate_plan(ctx, { margin_pct: pct }));
+        return reply('margin_sim', `${T.marginWarn(pct, typical).replace(/ Can you confirm it\?$/, '')} As a scenario: ${s.rows.filter((r) => r.offer !== 'none').length} groups keep an offer, **${inrSigned(s.profit)} a month**. Preview only.`, { card: { kind: 'sim', title: scenarioTitle(`margin ${pct}%`), sim: s } });
       }
       const s = call('simulate_plan', { margin_pct: pct }, () => tools.simulate_plan(ctx, { margin_pct: pct }));
       if (s.rows.every((r) => r.offer === 'none')) {
@@ -337,7 +323,9 @@ export function route(message: string, ctx: RayCtx): RayReply {
     if (amt && amt >= 1000) {
       const b = Math.min(Math.max(amt, 5000), 1000000);
       const s = call('simulate_plan', { budget: b }, () => tools.simulate_plan(ctx, { budget: b }));
-      return reply('budget_sim', T.budget(b, s), {
+      const full = s.spend === 0 ? call('simulate_plan', { budget: 1000000 }, () => tools.simulate_plan(ctx, { budget: 1000000 })) : null;
+      const cheap = full ? full.rows.filter((r) => r.spend > 0).sort((x, y) => x.spend - y.spend)[0] : undefined;
+      return reply('budget_sim', T.budget(b, s, cheap ? { label: `${groupLabel(cheap.group)} on ${cheap.offer_label}`, spend: cheap.spend } : null), {
         card: { kind: 'sim', title: FEATURES.rayV2 ? scenarioTitle(`budget ₹${b.toLocaleString('en-IN')}`) : `Budget ${b.toLocaleString('en-IN')} (preview)`, sim: s },
         quick: [{ label: 'Back to most profit', message: 'Show me the most-profit plan' }],
       });
@@ -347,7 +335,14 @@ export function route(message: string, ctx: RayCtx): RayReply {
   // 8. Override a group's offer.
   const g = groupIn(t);
   const o = offerIn(t);
-  if (g && o && /\b(give|offer|set|switch|move|change|put|let)\b/.test(t)) {
+  if (g && o && /\b(give|offer|set|switch|move|change|put|let)\b/.test(t) && !/\bwhy\b|\bhow come\b/.test(t)) {
+    const gs = ctx.derived.planGroups.find((x) => x.id === g)!;
+    const nowOffer = (ctx.approved ? ctx.derived.live : ctx.derived.draft).rows.find((x) => x.group === g)!.offer;
+    if (nowOffer === o) return reply('no_change', `${groupLabel(g)} already get ${T.offerName(o).toLowerCase()}, so there's nothing to change.`, { about: { group: g }, next: { label: 'Why?', message: `Why do ${GROUP_WORD[g]} get this offer?` } });
+    if (o !== 'none' && gs.priorLiftsPp[o] === undefined) {
+      const alts = (Object.keys(gs.priorLiftsPp) as typeof o[]).filter((x) => ctx.settings.allowedOffers.includes(x) || x === 'flat_150');
+      return reply('override_no_evidence', `I have no test evidence for ${T.offerName(o).toLowerCase()} with this group, so I can't price it honestly.${alts.length ? ` I can price ${alts.map((x) => T.offerName(x)).join(' or ')} for them.` : ''} Want a scenario with ${alts.length ? T.offerName(alts[0]) : 'another offer'}?`, alts.length ? { next: { label: `What if they get ${T.offerName(alts[0])}?`, message: `What if ${GROUP_WORD[g]} get ${T.offerName(alts[0])}?` }, about: { group: g } } : { about: { group: g } });
+    }
     const d = call('draft_plan_change', { group_id: g, offer_id: o }, () => tools.draft_plan_change(ctx, { group_id: g, offer_id: o }));
     if (d.draft.type !== 'override') return reply('help', T.help());
     return reply('draft_override', T.override(d.draft.groupLabel, T.offerName(o), d.draft), { card: { kind: 'draft', draft: d.draft } });
@@ -362,8 +357,12 @@ export function route(message: string, ctx: RayCtx): RayReply {
   // 10. Pause / stop.
   if (/\b(pause|kill|stop|turn off|switch off)\b/.test(t)) {
     const scope = g ?? 'all';
+    if (!ctx.approved) return reply('pause_not_live', 'Smart Offers isn\'t live yet, so there\'s nothing to pause. Your coupons (like ALPHA10) keep running as they are until you approve a plan.');
+    if (ctx.killed && scope === 'all') return reply('pause_not_live', 'Smart Offers is already paused. Say "resume" when you want it back.', { next: { label: 'Resume', message: 'Resume Smart Offers' } });
+    if (g && ctx.derived.liveOffers[g] === 'none') return reply('no_change', `${groupLabel(g)} already get no offer, so there's nothing to pause.`, { about: { group: g } });
     const d = call('request_pause', { scope }, () => tools.request_pause(ctx, { scope }));
-    return reply('pause_draft', T.pause(scope), { card: { kind: 'draft', draft: d.draft } });
+    if ('error' in d) return reply('help', T.help());
+    return reply('pause_draft', T.pause(scope === 'all' ? 'all' : groupLabel(scope)), { card: { kind: 'draft', draft: d.draft } });
   }
 
   // 11. Shopper explanations.
@@ -371,7 +370,7 @@ export function route(message: string, ctx: RayCtx): RayReply {
   if (who) {
     const r = call('explain_shopper', { example_id: who }, () => tools.explain_shopper(ctx, { example_id: who }));
     if ('error' in r) return reply('help', T.help());
-    return reply('explain_shopper', T.explainShopper(r));
+    return reply('explain_shopper', T.explainShopper(r, ctx.approved && !ctx.killed));
   }
 
   // 12. Group explanations.
@@ -393,14 +392,18 @@ export function route(message: string, ctx: RayCtx): RayReply {
 
   if (/\bsimilar\b|\bbenchmark|\bpeers?\b|\btypical/.test(t)) return reply('benchmark', benchText());
 
-  if (/\balpha10\b|\bwaste|\bwhere did\b|\blast month\b.*\b(coupon|discount|code)|\bcoupons?\b|\bdiscounts?\b|\boffers? (and|&) coupons\b/.test(t)) {
+  if (/\balpha10\b|\bwast(e|ing)|\bwhere did\b|\blast month\b.*\b(coupon|discount|code)|\bcoupons?\b|\bdiscounts?\b|\boffers? (and|&) coupons\b|\bwelcome code\b|\b(using|use) (my )?codes?\b/.test(t)) {
     const w = call('get_offer_waste', { code: 'ALPHA10' }, () => tools.get_offer_waste(ctx, { code: 'ALPHA10' }));
+    if (ctx.approved && ctx.derived.today) {
+      const r = call('get_results', {}, () => tools.get_results(ctx, {}));
+      return reply('offer_waste', `**Smart Offers, day ${r.days}:** ${inrSigned(r.profit)} so far after returns, ${xr(r.return_x)} return, ${inr(r.cost_per_extra_order ?? 0)} per extra order. ${r.proof}\n**Before go-live**, ALPHA10 ${w.profit < 0 ? `lost ${inr(Math.abs(w.profit))}` : `made ${inr(w.profit)}`} in a month (${xr(w.return_x)} vs ${xr(w.break_even_x)} break-even); it was retired when you approved the plan.`, { card: { kind: 'results', data: r }, quick: FOLLOW_UPS.results });
+    }
     return reply('offer_waste', T.waste(w), { card: { kind: 'waste' }, quick: FOLLOW_UPS.offers });
   }
 
   if (/\bplan\b|\bfix\b|\bset ?up\b|\bsmart offers?\b|\brecommend|\boptimi[sz]e|\bmost profit|\bwhich offers?\b/.test(t)) {
     const s = call('simulate_plan', {}, () => tools.simulate_plan(ctx, {}));
-    return reply('plan', T.plan(s), { card: { kind: 'plan_live' }, quick: FOLLOW_UPS.plan });
+    return reply('plan', T.plan(s, ctx.approved), { card: { kind: 'plan_live' }, quick: FOLLOW_UPS.plan });
   }
 
   if (/\bsales\b|\bsummary\b|\bkpis?\b|\bhow did\b|\borders\b/.test(t)) {

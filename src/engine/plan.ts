@@ -18,7 +18,15 @@ export type PlanSettings = {
   allowedOffers?: readonly OfferId[];
   maxDiscountInr?: number;
   overrides?: Partial<Record<GroupId, OfferId>>;
+  /**
+   * v3 growth trade-off: give up up to `giveUpInr` of monthly profit (vs the plan without it) for more
+   * new customers or orders. Upgrades go to the best extra customers per rupee of profit lost, within budget.
+   */
+  growth?: GrowthSetting | null;
 };
+
+export type GrowthMetric = 'new_customers' | 'orders';
+export type GrowthSetting = { metric: GrowthMetric; giveUpInr: number };
 
 export const DEFAULT_SETTINGS: PlanSettings = {
   budget: 100000,
@@ -58,7 +66,7 @@ export type PlanResult = {
   settings: PlanSettings;
 };
 
-type Opt = { offer: OfferId; e: Econ };
+export type Opt = { offer: OfferId; e: Econ };
 
 /** Store-level order counts shared by every scenario. */
 export function storeOrders(groups: GroupStats[]) {
@@ -108,6 +116,7 @@ export function buildPlan(groups: GroupStats[], settings: Partial<PlanSettings> 
   const totalSpend = (ch: Map<GroupId, Opt>) => groups.reduce((a, g) => a + g.checkouts * coverage * ch.get(g.id)!.e.spend, 0);
 
   // Budget: apply the downgrade that loses the least objective per rupee saved.
+  const downgraded = totalSpend(choice) > s.budget + 1e-6;
   while (totalSpend(choice) > s.budget + 1e-6) {
     const cands: { k: number; g: GroupId; o: Opt }[] = [];
     for (const g of groups) {
@@ -123,6 +132,22 @@ export function buildPlan(groups: GroupStats[], settings: Partial<PlanSettings> 
     cands.sort((a, b) => a.k - b.k);
     choice.set(cands[0].g, cands[0].o);
   }
+  // Refill (v3, mirrored in reference_engine.py): greedy downgrades can leave budget unused; add the upgrade
+  // with the largest objective gain that still fits, until none does. Plans that never hit the budget are unchanged.
+  while (downgraded) {
+    const room = s.budget - totalSpend(choice);
+    let best: { gain: number; g: GroupId; o: Opt } | null = null;
+    for (const g of groups) {
+      const cur = choice.get(g.id)!, n = g.checkouts * coverage;
+      for (const o2 of opts.get(g.id)!) {
+        const gain = (objective(g, o2.e) - objective(g, cur.e)) * n;
+        const extra = (o2.e.spend - cur.e.spend) * n;
+        if (gain > 1e-9 && extra <= room + 1e-6 && (!best || gain > best.gain + 1e-9)) best = { gain, g: g.id, o: o2 };
+      }
+    }
+    if (!best) break;
+    choice.set(best.g, best.o);
+  }
 
   let infeasible: PlanResult['infeasible'];
   if (s.goal === 'orders_steady') {
@@ -132,6 +157,14 @@ export function buildPlan(groups: GroupStats[], settings: Partial<PlanSettings> 
       const reach = keepOrdersSteady(groups, s, big, opts, coverage, 1_000_000);
       infeasible = { bestChangePct: res.changePct, bestAnyBudgetPct: reach.changePct, ...(reach.ok ? { raiseBudgetTo: Math.ceil(totalSpend(big) / 1000) * 1000 } : {}) };
     }
+  }
+
+  if (s.growth && s.growth.giveUpInr > 0) {
+    const steps = growthSteps(groups, s, choice, coverage, s.growth.metric);
+    // ₹1 tolerance: give-up amounts are shown and passed back rounded to the rupee.
+    const within = steps.filter((x) => x.giveUp <= s.growth!.giveUpInr + 1);
+    const last = within[within.length - 1];
+    if (last) for (const [gid, o] of last.choice) choice.set(gid, o);
   }
 
   // Merchant overrides win (shown with their cost); they are not re-optimised.
@@ -144,6 +177,45 @@ export function buildPlan(groups: GroupStats[], settings: Partial<PlanSettings> 
     }
   }
   return assemble(groups, choice, s, coverage, overridden, infeasible);
+}
+
+/** One step of the growth frontier: the plan after this upgrade (cumulative from the starting plan). */
+export type GrowthStep = { choice: Map<GroupId, Opt>; giveUp: number; gained: number; change: { group: GroupId; from: OfferId; to: OfferId } };
+
+/**
+ * Greedy growth frontier from a starting choice: each step moves one group to the offer that adds the most
+ * new customers (or orders) per rupee of profit lost, within the budget and max discount. A merchant-set
+ * minimum return (floorReturn) still applies; break-even does not (the profit given up is the point).
+ */
+export function growthSteps(groups: GroupStats[], s: PlanSettings, start: Map<GroupId, Opt>, coverage: number, metric: GrowthMetric): GrowthStep[] {
+  const choice = new Map(start);
+  const counts = (g: GroupStats) => metric === 'orders' || NEW_GROUPS.includes(g.id);
+  const opts = new Map(groups.map((g) => [g.id, optsFor(g, s, s.floorReturn ?? -Infinity)]));
+  const spend = () => groups.reduce((a, g) => a + g.checkouts * coverage * choice.get(g.id)!.e.spend, 0);
+  const profit = () => groups.reduce((a, g) => a + g.checkouts * coverage * choice.get(g.id)!.e.profit, 0);
+  const metricOf = () => groups.reduce((a, g) => a + (counts(g) ? g.checkouts * coverage * choice.get(g.id)!.e.lift : 0), 0);
+  const p0 = profit(), m0 = metricOf();
+  const out: GrowthStep[] = [];
+  for (let guard = 0; guard < 40; guard++) {
+    let best: { k: number; g: GroupStats; o: Opt } | null = null;
+    for (const g of groups) {
+      if (!counts(g)) continue;
+      const cur = choice.get(g.id)!;
+      for (const o2 of opts.get(g.id)!) {
+        const gained = (o2.e.lift - cur.e.lift) * g.checkouts * coverage;
+        if (gained <= 1e-9) continue;
+        if (spend() + (o2.e.spend - cur.e.spend) * g.checkouts * coverage > s.budget + 1e-6) continue;
+        const lost = (cur.e.profit - o2.e.profit) * g.checkouts * coverage;
+        const k = lost <= 1e-9 ? Infinity : gained / lost;
+        if (!best || k > best.k + 1e-12) best = { k, g, o: o2 };
+      }
+    }
+    if (!best) break;
+    const from = choice.get(best.g.id)!.offer;
+    choice.set(best.g.id, best.o);
+    out.push({ choice: new Map(choice), giveUp: Math.max(0, p0 - profit()), gained: metricOf() - m0, change: { group: best.g.id, from, to: best.o.offer } });
+  }
+  return out;
 }
 
 function ordersChange(groups: GroupStats[], extraOrders: number): { orders: number; pct: number } {
@@ -207,6 +279,18 @@ function assemble(
 export const offerMap = (p: PlanResult): Record<GroupId, OfferId> =>
   Object.fromEntries(p.rows.map((r) => [r.group, r.offer])) as Record<GroupId, OfferId>;
 
+/** Playbook variants have no pool percentiles: use the closest standard offer's spread around the variant's own prior. */
+const RANGE_ANCHOR: Partial<Record<OfferId, OfferId>> = { flat_150: 'flat_200', free_shipping_999: 'free_shipping', free_shipping_prepaid: 'free_shipping' };
+function rangeLift(t: Record<GroupId, Partial<Record<OfferId, number>>>, g: GroupStats, offer: OfferId): number | undefined {
+  const direct = t[g.id]?.[offer];
+  if (direct !== undefined) return direct;
+  const prior = g.priorLiftsPp[offer];
+  if (prior === undefined) return undefined;
+  const a = RANGE_ANCHOR[offer];
+  const anchorPrior = a ? g.priorLiftsPp[a] : undefined, anchorPct = a ? t[g.id]?.[a] : undefined;
+  return anchorPrior && anchorPct !== undefined ? prior * (anchorPct / anchorPrior) : prior;
+}
+
 /** Plan range: re-run the chosen offers' economics with pool 25th / 75th percentile lifts (SPEC 6.2). */
 export function planRange(groups: GroupStats[], p: PlanResult, p25: Record<GroupId, Partial<Record<OfferId, number>>>, p75: Record<GroupId, Partial<Record<OfferId, number>>>) {
   const run = (t: Record<GroupId, Partial<Record<OfferId, number>>>) => {
@@ -214,7 +298,7 @@ export function planRange(groups: GroupStats[], p: PlanResult, p25: Record<Group
     for (const r of p.rows) {
       if (r.offer === 'none') continue;
       const g = groups.find((x) => x.id === r.group)!;
-      const e = perCheckout(g, r.offer, p.settings.margin, t[r.group]?.[r.offer] ?? g.priorLiftsPp[r.offer]);
+      const e = perCheckout(g, r.offer, p.settings.margin, rangeLift(t, g, r.offer));
       spend += r.covered * e.spend;
       sales += r.covered * e.extraSales;
     }

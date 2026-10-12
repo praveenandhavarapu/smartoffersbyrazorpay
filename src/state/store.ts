@@ -4,6 +4,7 @@
  */
 import { create } from 'zustand';
 import type { Goal, GroupId, OfferId } from '../data/types';
+import type { GrowthSetting } from '../engine/plan';
 import { DEMO_DATES, MOMENT_DAY, type Moment } from '../lib/dates';
 import { makeEntry, type Actor, type AuditEntry } from './audit';
 import type { InstantSettlement } from '../data/ledgerQueries';
@@ -24,7 +25,19 @@ export type Settings = {
   allowedOffers: OfferId[];
   festiveWindow: boolean;
   maxDiscountInr: number;
+  /** v3: the merchant's minimum "return after returns" for any offer (null/absent = break-even). */
+  minReturn?: number | null;
+  /** v3: profit the merchant gives up for growth (null/absent = none). */
+  growth?: GrowthSetting | null;
 };
+
+/** v3: the inputs Smart Offers needs from the merchant. None is assumed: each is the merchant's own or a typical value they accepted. */
+export type InputKey = 'budget' | 'keepPer1000' | 'goal' | 'offers' | 'minReturn' | 'festiveWindow';
+export const INPUT_KEYS: InputKey[] = ['budget', 'keepPer1000', 'goal', 'offers', 'minReturn', 'festiveWindow'];
+export type InputSource = 'merchant' | 'typical';
+export const INPUT_LABEL: Record<InputKey, string> = { budget: 'Monthly budget', keepPer1000: 'What you keep from a ₹1,000 sale', goal: 'Goal', offers: 'Offer menu and max discount', minReturn: 'Minimum return', festiveWindow: 'Festive drop rule' };
+const KEY_OF: Partial<Record<keyof Settings, InputKey>> = { budget: 'budget', keepPer1000: 'keepPer1000', goal: 'goal', ordersFloorPct: 'goal', growth: 'goal', allowedOffers: 'offers', maxDiscountInr: 'offers', minReturn: 'minReturn', festiveWindow: 'festiveWindow' };
+export const inputKeysOf = (patch: Partial<Settings>): InputKey[] => [...new Set((Object.keys(patch) as (keyof Settings)[]).map((k) => KEY_OF[k]).filter((k): k is InputKey => Boolean(k)))];
 
 export const DEFAULT_USER_SETTINGS: Settings = {
   budget: 100000, keepPer1000: DEFAULT_KEEP_PER_1000, goal: 'most_profit', ordersFloorPct: 5,
@@ -62,6 +75,8 @@ type Persisted = {
   undone: string[];
   /** v2 §8: share anonymised results to get the playbook (default on). */
   giveToGet: boolean;
+  /** v3: which inputs the merchant gave (or accepted as typical). Approving the plan counts as confirming all. */
+  confirmed: Partial<Record<InputKey, InputSource>>;
   outageEvents: number;
   audit: AuditEntry[];
 };
@@ -70,7 +85,10 @@ export type Snap = 'day7' | 'day14' | 'day20' | 'day30' | 'day60';
 type Ephemeral = { snapshot: Snap; outage: boolean };
 
 type Actions = {
-  setSettings: (patch: Partial<Settings>) => void;
+  /** source: who supplied the values (marks those inputs confirmed). Default: the merchant. */
+  setSettings: (patch: Partial<Settings>, source?: InputSource) => void;
+  /** Accept values for inputs without changing them (e.g. "use typical values"). */
+  confirmInputs: (keys: InputKey[], source: InputSource) => void;
   approve: () => void;
   /** Draft -> live (logged with the diff). Only this writes approvedSettings after the first approval. */
   approveChanges: (diff?: string) => void;
@@ -107,7 +125,7 @@ export type AppState = Persisted & Ephemeral & Actions;
 const initial: Persisted = {
   settings: DEFAULT_USER_SETTINGS, approved: false, approvedSettings: null, approvedOn: null, overrides: {}, killed: false,
   moment: 'before', creatorFix: 'pending', creatorFixedOn: null, rayMode: 'live', settlementMode: 't1', instantSettlements: [],
-  reviewDecisions: {}, reviewsOpened: [], notificationsRead: [], pilotDecision: null, alpha10Restored: false, experiments: {}, experimentSpace: true, learningDecisions: {}, learningDecidedOn: {}, undone: [], giveToGet: true, outageEvents: 0,
+  reviewDecisions: {}, reviewsOpened: [], notificationsRead: [], pilotDecision: null, alpha10Restored: false, experiments: {}, experimentSpace: true, learningDecisions: {}, learningDecidedOn: {}, undone: [], giveToGet: true, confirmed: {}, outageEvents: 0,
   audit: [],
 };
 
@@ -138,11 +156,11 @@ const pick = (s: AppState): Persisted => ({
   killed: s.killed, moment: s.moment, creatorFix: s.creatorFix, creatorFixedOn: s.creatorFixedOn, rayMode: s.rayMode, settlementMode: s.settlementMode,
   instantSettlements: s.instantSettlements, reviewDecisions: s.reviewDecisions, reviewsOpened: s.reviewsOpened,
   notificationsRead: s.notificationsRead, pilotDecision: s.pilotDecision, alpha10Restored: s.alpha10Restored,
-  experiments: s.experiments, experimentSpace: s.experimentSpace, learningDecisions: s.learningDecisions, learningDecidedOn: s.learningDecidedOn, undone: s.undone, giveToGet: s.giveToGet, outageEvents: s.outageEvents, audit: s.audit,
+  experiments: s.experiments, experimentSpace: s.experimentSpace, learningDecisions: s.learningDecisions, learningDecidedOn: s.learningDecidedOn, undone: s.undone, giveToGet: s.giveToGet, confirmed: s.confirmed, outageEvents: s.outageEvents, audit: s.audit,
 });
 
 export const describeSettings = (s: Settings) =>
-  `budget ₹${s.budget.toLocaleString('en-IN')}, keep ₹${s.keepPer1000} of ₹1,000, goal ${GOAL_LABEL[s.goal]}${s.goal === 'orders_steady' ? ` (orders fall at most ${s.ordersFloorPct}%)` : ''}, offers ${s.allowedOffers.map(offerLabel).join(', ')}`;
+  `budget ₹${s.budget.toLocaleString('en-IN')}, keep ₹${s.keepPer1000} of ₹1,000, goal ${GOAL_LABEL[s.goal]}${s.goal === 'orders_steady' ? ` (orders fall at most ${s.ordersFloorPct}%)` : ''}, offers ${s.allowedOffers.map(offerLabel).join(', ')}${s.minReturn ? `, minimum return ${s.minReturn}x` : ''}${s.growth ? `, give up up to ₹${s.growth.giveUpInr.toLocaleString('en-IN')} of profit for more ${s.growth.metric === 'orders' ? 'orders' : 'new customers'}` : ''}`;
 const describe = describeSettings;
 
 /** The draft: unapproved edits to a live plan (null when nothing is pending). */
@@ -158,13 +176,14 @@ export const useStore = create<AppState>((set, get) => {
     ...load(),
     snapshot: 'day20',
     outage: false,
-    setSettings: (patch) => {
+    setSettings: (patch, source = 'merchant') => {
       const before = get().settings;
       const after = { ...before, ...patch };
-      set({ settings: after });
+      set((st) => ({ settings: after, confirmed: { ...st.confirmed, ...Object.fromEntries(inputKeysOf(patch).map((k) => [k, source])) } }));
       // v2: edits after approval are a draft; only Approve changes goes live and is logged.
       if (get().approved && !FEATURES.netReturns) log('Merchant (Praveen)', 'rule_change', 'Changed plan settings', describe(before), describe(after));
     },
+    confirmInputs: (keys, source) => set((st) => ({ confirmed: { ...st.confirmed, ...Object.fromEntries(keys.map((k) => [k, source])) } })),
     approve: () => {
       const s = get().settings;
       set({ approved: true, approvedSettings: s, approvedOn: DEMO_DATES[get().moment], killed: false });

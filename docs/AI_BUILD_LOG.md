@@ -192,3 +192,27 @@ How the v2 build was made: what the AI (Claude Code) did, which decisions came f
   - Browser checks of Undo, Approve/Discard, the promotion and the tour.
   - `docs/V2_QA.md` maps every §15 item to its evidence and leaves two manual items for Praveen: Ray Live on the deployed site, and the Netlify badge and phone run.
 - **Not verified here:** Ray Live (needs the deployed function and key) and how the Netlify badge renders.
+
+## v3 — Praveen's review of the live site (11 Oct 2026)
+
+- **Praveen asked:**
+  - Don't assume merchant numbers; show what stores of similar size use and let the merchant choose.
+  - Fix "I couldn't run that scenario" after offering it, and fix the scenario card that disagreed with Ray's recommendation.
+  - Fix the dead Edit button.
+  - Show recommended offers beyond the menu.
+  - Show what growth costs in profit, and what a squeezed margin costs.
+  - Simulate 100–200 chats and fix every edge case.
+- **AI did:**
+  - **Baseline first.** 225 scripted conversations × 6 store states through Ray's conversation core (588 failures) and a headless click-sweep of 12 screens (2 dead buttons).
+  - **Engine.** Store-size benchmarks from a seeded economics pass over the synthetic network. Growth frontier and margin squeeze. Off-menu offer scoring. Minimum return and growth settings. Per-input confirmations.
+  - **Screens.** Your numbers with typical ranges, an Approve gate, inline Edit, Recommended offers, and Trade-offs.
+  - **Ray.**
+    - Scenario tool with per-group overrides and menu changes; new trade-off, recommendation and benchmark tools.
+    - Scenario comparison cards; system-prompt rules 12–15.
+    - Follow-ups that act on "yes", "what about 35%?", "why?" and "give them…".
+    - Setup that asks every input and shows typical values.
+  - **Review loop.** Two rounds of transcript review by a separate agent acting as a demanding merchant, about 40 problems each round. Each class of problem became a permanent check in `harness.ts`. An agent also played Live Ray with the real prompt and tools.
+  - **Final state.** 250 conversations × 6 states, 0 failures; 227 tests; 40 browser checks; the tour runs end to end.
+- **Decided:** see `docs/V3_REVIEW.md` ("Choices made"). The starting values stay, but they are labelled as typical and must be confirmed. Growth may go below break-even per offer because that is the profit the merchant chose to give up. The synthetic band is calibrated so its medians equal the starting values.
+- **Not verified here:** Ray Live wording on the deployed site; the role-play only approximates the production model.
+- **Time:** ~5 h.

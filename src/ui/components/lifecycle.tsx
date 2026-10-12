@@ -1,6 +1,6 @@
 /** Lifecycle features: notifications, opportunity signals, why AI, weekly reviews, accuracy, pilot decision, experiments, exit. */
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useModel } from '../../state/ModelContext';
 import { useStore } from '../../state/store';
 import { useChat } from '../../ray/chatStore';
@@ -149,7 +149,7 @@ function ItemIcon({ kind }: { kind: ReviewItem['kind'] }) {
 }
 
 /** One Monday review with approve / dismiss for items that change something. */
-export function ReviewCard({ review, open: startOpen = true }: { review: WeeklyReview; open?: boolean }) {
+export function ReviewCard({ review, open: startOpen = true, focus = null }: { review: WeeklyReview; open?: boolean; focus?: string | null }) {
   const decisions = useStore((s) => s.reviewDecisions);
   const decide = useStore((s) => s.decideReview);
   const applyOverride = useStore((s) => s.applyOverride);
@@ -176,7 +176,7 @@ export function ReviewCard({ review, open: startOpen = true }: { review: WeeklyR
       {open && (
         <div className="rv-items">
           {review.items.map((i) => (
-            <div key={i.id} className={`rv-item ${i.kind}`}>
+            <div key={i.id} id={`rv-${i.id}`} className={`rv-item ${i.kind}${focus === i.id ? ' focus' : ''}`}>
               <ItemIcon kind={i.kind} />
               <div><b>{i.title}</b><p>{i.detail}</p></div>
               {i.action && (decisions[i.id] ? <span className={`status ${decisions[i.id] === 'approved' ? 'ok' : ''}`}>{decisions[i.id]}</span> : (
@@ -193,11 +193,19 @@ export function ReviewCard({ review, open: startOpen = true }: { review: WeeklyR
 
 export function ReviewsList() {
   const { derived } = useModel();
+  const [sp] = useSearchParams();
+  const item = sp.get('item');
+  // "Waiting on you" links land on the exact item: open its review and scroll to it.
+  useEffect(() => {
+    if (!item) return;
+    const t = setTimeout(() => document.getElementById(`rv-${item}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 120);
+    return () => clearTimeout(t);
+  }, [item]);
   if (!derived.reviews.length) return <div className="rcard"><p>No reviews yet. The first Monday review arrives one week after you approve a plan.</p></div>;
   return (
     <div className="stack-gap">
       {derived.nextReview && <div className="rcard next-review"><b>Next review: Mon {fmtDate(derived.nextReview, false)}, 06:00</b><span className="muted small">Ray checks measured results, re-plans with what it learned, and asks you to approve any change. You also get it on WhatsApp.</span></div>}
-      {derived.reviews.map((r, i) => <ReviewCard key={r.id} review={r} open={i === 0} />)}
+      {derived.reviews.map((r, i) => <ReviewCard key={`${r.id}-${item ?? ''}`} review={r} open={i === 0 || (item !== null && r.items.some((x) => x.id === item))} focus={item} />)}
     </div>
   );
 }

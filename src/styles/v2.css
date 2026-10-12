@@ -117,3 +117,32 @@
 .leak-bars { display: flex; align-items: flex-end; gap: 2px; height: 60px; border-bottom: 1px solid var(--line); }
 .leak-bars i { flex: 1; min-width: 0; background: var(--blue-soft); position: relative; display: flex; align-items: flex-end; border-radius: 2px 2px 0 0; }
 .leak-bars i b { display: block; width: 100%; background: var(--amber); border-radius: 2px 2px 0 0; }
+/* v3: your numbers (benchmarks), trade-offs, recommended offers */
+.src { display: inline-block; margin-left: 6px; font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--line2); color: var(--ink2); vertical-align: 1px; }
+.src.ok { background: var(--green-soft, #e7f6ef); color: var(--green); }
+.src.warn { background: var(--amber-soft); color: var(--amber); }
+.hint.bench { color: var(--ink2); }
+.hint.bench .linkish { margin-left: 6px; font-size: 12px; color: var(--blue); }
+.setup.embedded { border: 1px solid var(--line); border-radius: 12px; margin: 8px 0 12px; background: var(--surface); }
+.inp.short.wide { max-width: 260px; }
+.inputs-check { border: 1px solid var(--amber-line); background: var(--amber-soft); border-radius: 10px; padding: 10px 12px; margin: 8px 0 12px; display: grid; gap: 6px; }
+.inputs-check > b { color: var(--amber); }
+.inputs-check ul { margin: 0; padding-left: 18px; font-size: 13px; }
+.inputs-check .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.plan-gate { flex-basis: 100%; }
+.tradeoffs .seg { margin: 0 8px 10px 0; }
+.dtable.tradeoff tr.on td { background: var(--blue-soft); }
+.dtable.tradeoff .sub.warn { color: var(--amber); }
+.dtable.tradeoff td:last-child { white-space: nowrap; }
+.recommend .rec-row { display: flex; gap: 10px; justify-content: space-between; align-items: center; border-top: 1px solid var(--line2); padding: 10px 0; font-size: 13px; }
+.recommend .rec-row > div:first-child { display: grid; gap: 3px; min-width: 0; }
+.recommend .rec-act { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+.rec-v { font-size: 13px; }
+.rec-v.adds_profit { color: var(--green); }
+.rec-v.not_at_your_numbers { color: var(--ink3); }
+.scen-table td:first-child { min-width: 140px; }
+@media (max-width: 560px) {
+  .recommend .rec-row { flex-direction: column; align-items: flex-start; }
+  .recommend .rec-act { justify-content: flex-start; }
+}
+.rv-item.focus { outline: 2px solid var(--amber); outline-offset: 2px; border-radius: 8px; }

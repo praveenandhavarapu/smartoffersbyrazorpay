@@ -20,6 +20,8 @@ import { costPerExtraOrder, dayMetrics, earnedPerExtraOrder, keptRate, leakedRup
 import { FEATURES } from '../config/features';
 import { GOAL_LABEL, groupLabel, offerLabel } from '../lib/labels';
 import { buildLearning, type LearningModel } from '../engine/learning';
+import { withPlaybookPriors } from '../engine/recommend';
+import { getStoreBenchmark } from '../data/network/peers';
 import type { ReviewItem } from '../engine/review';
 import type { Model } from './model';
 import { DEFAULT_USER_SETTINGS, draftSettingsOf, marginOf, type Settings } from './store';
@@ -29,6 +31,7 @@ export function toPlanSettings(s: Settings, overrides?: Partial<Record<GroupId, 
   return {
     budget: s.budget, margin: marginOf(s), keptRate: keptRate(), goal: s.goal, ordersFloorPct: s.ordersFloorPct,
     allowedOffers: [...s.allowedOffers, ...extraAllowed.filter((o) => !s.allowedOffers.includes(o))], maxDiscountInr: s.maxDiscountInr, overrides,
+    ...(s.minReturn ? { floorReturn: s.minReturn } : {}), growth: s.growth ?? null,
   };
 }
 
@@ -61,7 +64,7 @@ export const todaySnap = (m: Moment): SnapKey | null => (m === 'day20' ? 'day20'
 export function settingsDiff(a: Settings, b: Settings): string[] {
   const out: string[] = [];
   if (a.budget !== b.budget) out.push(`Budget ${inr(a.budget)} → ${inr(b.budget)}`);
-  if (a.keepPer1000 !== b.keepPer1000) out.push(`Keep per ₹1,000 ${inr(a.keepPer1000)} → ${inr(b.keepPer1000)}`);
+  if (a.keepPer1000 !== b.keepPer1000) out.push(`What you keep from ₹1,000 ${inr(a.keepPer1000)} → ${inr(b.keepPer1000)}`);
   if (a.goal !== b.goal) out.push(`Goal ${GOAL_LABEL[a.goal]} → ${GOAL_LABEL[b.goal]}`);
   if (a.goal === 'orders_steady' && b.goal === 'orders_steady' && a.ordersFloorPct !== b.ordersFloorPct) out.push(`Orders may fall at most ${a.ordersFloorPct}% → ${b.ordersFloorPct}%`);
   const added = b.allowedOffers.filter((o) => !a.allowedOffers.includes(o)), removed = a.allowedOffers.filter((o) => !b.allowedOffers.includes(o));
@@ -69,6 +72,9 @@ export function settingsDiff(a: Settings, b: Settings): string[] {
   if (removed.length) out.push(`Offer menu − ${removed.map(offerLabel).join(', ')}`);
   if (a.festiveWindow !== b.festiveWindow) out.push(`No offers on the festive drop: ${a.festiveWindow ? 'on' : 'off'} → ${b.festiveWindow ? 'on' : 'off'}`);
   if (a.maxDiscountInr !== b.maxDiscountInr) out.push(`Max discount ${inr(a.maxDiscountInr)} → ${inr(b.maxDiscountInr)}`);
+  if ((a.minReturn ?? null) !== (b.minReturn ?? null)) out.push(`Minimum return ${a.minReturn ? `${a.minReturn}x` : 'break-even'} → ${b.minReturn ? `${b.minReturn}x` : 'break-even'}`);
+  const gl = (x: Settings) => (x.growth ? `give up up to ${inr(x.growth.giveUpInr)} for more ${x.growth.metric === 'orders' ? 'orders' : 'new customers'}` : 'none');
+  if (gl(a) !== gl(b)) out.push(`Growth trade-off ${gl(a)} → ${gl(b)}`);
   return out;
 }
 
@@ -110,9 +116,10 @@ export function derive(m: Model, st: DerivedInput) {
     decidedOn: st.learningDecidedOn ?? {}, paymentAware: FEATURES.paymentAware,
   }, marginOf(liveSettings), kept, groupLabel) : null;
   const promoted = learning?.promotedOffers ?? [];
-  const planGroups = learning?.groupsV2 ?? g;
+  // Playbook priors for offers not on the menu yet (used only when the merchant adds one); measured priors win.
+  const planGroups = withPlaybookPriors(learning?.groupsV2 ?? g);
   const draft = buildPlan(planGroups, toPlanSettings(draftSettings, undefined, promoted));
-  const range = planRange(g, draft, m.pool.p25, m.pool.p75);
+  const range = planRange(planGroups, draft, m.pool.p25, m.pool.p75);
   const a10 = alpha10(g, v2 ? margin : v1Margin, kept);
   const a10AtMargin = alpha10(g, draftMargin, kept);
   const allCodes = codesEconomics(g, () => true, v2 ? margin : v1Margin, kept);
@@ -130,7 +137,7 @@ export function derive(m: Model, st: DerivedInput) {
   }, 0), 0);
 
   const live: PlanResult = buildPlan(planGroups, toPlanSettings(liveSettings, st.overrides, promoted));
-  const liveRange = planRange(g, live, m.pool.p25, m.pool.p75);
+  const liveRange = planRange(planGroups, live, m.pool.p25, m.pool.p75);
   const liveOffers: Record<GroupId, OfferId> = st.killed
     ? (Object.fromEntries(GROUP_IDS.map((x) => [x, 'none'])) as Record<GroupId, OfferId>)
     : offerMap(live);
@@ -253,6 +260,10 @@ export function derive(m: Model, st: DerivedInput) {
     creatorFixDate: st.creatorFixDate ?? null,
     approvedDiffersFromPilot: GROUP_IDS.some((x) => offerMap(live)[x] !== (learning ? learning.offersOn(Math.max(NOW_DAY[moment0], 1)) : pilotOffers)[x]),
     learning,
+    /** v3: the groups and promoted offers every plan uses (Ray scenarios included), and benchmarks for this store's size. */
+    planGroups, promoted,
+    planSettingsFor: (x: Settings, overrides?: Partial<Record<GroupId, OfferId>>) => toPlanSettings(x, overrides, promoted),
+    benchmark: getStoreBenchmark(gmv),
   };
 }
 

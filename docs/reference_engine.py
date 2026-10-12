@@ -69,6 +69,7 @@ def plan(budget=100000, margin=None, floor=None, coverage=None, allowed=None):
         return t
 
     t = totals(choice)
+    downgraded = t["spend"] > budget + 1e-6
     while t["spend"] > budget + 1e-6:
         cands = []
         for g, (o, e) in choice.items():
@@ -82,6 +83,23 @@ def plan(budget=100000, margin=None, floor=None, coverage=None, allowed=None):
         cands.sort(key=lambda c: c[0])
         _, g, new = cands[0]
         choice[g] = new
+        t = totals(choice)
+
+    # Refill (v3): the greedy downgrades can leave budget unused. Add the upgrade with the largest
+    # profit gain that still fits, until none does. Plans that never hit the budget are unchanged.
+    while downgraded:
+        room = budget - t["spend"]
+        best = None
+        for g, (o, e) in choice.items():
+            n = GROUPS[g]["checkouts"] * coverage
+            for o2, e2 in opts(g):
+                gain = (e2["profit"] - e["profit"]) * n
+                extra = (e2["spend"] - e["spend"]) * n
+                if gain > 1e-9 and extra <= room + 1e-6 and (best is None or gain > best[0] + 1e-9):
+                    best = (gain, g, (o2, e2))
+        if best is None:
+            break
+        choice[best[1]] = best[2]
         t = totals(choice)
 
     rows = []

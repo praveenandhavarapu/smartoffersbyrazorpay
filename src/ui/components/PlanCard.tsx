@@ -12,6 +12,34 @@ import { Check, Shield } from './Icons';
 import { OfferChip, shortGroup } from './bits';
 import { HoldoutNote } from './lifecycle';
 import { WhyPlaybook } from './Playbook';
+import { SetupCard } from './SetupCard';
+import { INPUT_LABEL } from '../../state/store';
+import { inputValue, pendingInputs, typicalPatch } from '../../state/inputs';
+
+/** v3: nothing is assumed. Before the first approval, list the inputs the merchant hasn't confirmed. */
+function InputsCheck({ onEdit }: { onEdit: () => void }) {
+  const { derived } = useModel();
+  const approved = useStore((s) => s.approved);
+  const confirmed = useStore((s) => s.confirmed);
+  const settings = useStore((s) => s.settings);
+  const set = useStore((s) => s.setSettings);
+  const confirm = useStore((s) => s.confirmInputs);
+  const pending = pendingInputs(approved, confirmed);
+  if (!pending.length) return null;
+  const b = derived.benchmark;
+  const useTypical = () => { set(typicalPatch(b, pending, derived.draftBreakEven), 'typical'); confirm(pending, 'typical'); };
+  return (
+    <div className="inputs-check" role="status">
+      <b>Before you approve: {pending.length} of your numbers {pending.length === 1 ? 'is' : 'are'} not confirmed.</b>
+      <span className="small">I don't assume them. The plan below uses typical values for {b.ok ? `${b.peerLabel.toLowerCase()} (${num(b.stores)} stores)` : 'stores like yours'}. Keep them, or enter yours.</span>
+      <ul>{pending.map((k) => <li key={k}>{INPUT_LABEL[k]}: <b>{inputValue(k, settings, derived.draftBreakEven)}</b></li>)}</ul>
+      <div className="btns">
+        <button className="btn primary sm" onClick={useTypical}>Use these typical values</button>
+        <button className="btn secondary sm" onClick={onEdit}>Enter my own</button>
+      </div>
+    </div>
+  );
+}
 
 /** Yellow "Draft · not live" bar: what changes, and the only two ways out (Approve changes / Discard). */
 function DraftBar() {
@@ -32,8 +60,10 @@ function DraftBar() {
   );
 }
 
-export function PlanCard({ onAsk }: { onAsk?: (q: string) => void }) {
+export function PlanCard({ onAsk, inlineSetup }: { onAsk?: (q: string) => void; inlineSetup?: boolean }) {
   const { model, derived } = useModel();
+  const [editing, setEditing] = useState(false);
+  const confirmed = useStore((s) => s.confirmed);
   const approved = useStore((s) => s.approved);
   const approve = useStore((s) => s.approve);
   const approvedOn = useStore((s) => s.approvedOn);
@@ -53,6 +83,14 @@ export function PlanCard({ onAsk }: { onAsk?: (q: string) => void }) {
   const cmp = showLive ? derived.comparison : derived.draftComparison;
   const allNone = p.rows.every((r) => r.offer === 'none');
   const v1Chosen = p.rows.find((r) => r.group === 'new_ads_big' && r.offer === 'flat_200');
+  const pending = pendingInputs(approved, confirmed);
+  // Edit: inline inputs inside the chat; on the Setup & plan page, jump to the inputs card.
+  const edit = () => {
+    if (inlineSetup) { setEditing((e) => !e); return; }
+    const el = document.getElementById('setup-card');
+    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); (el.querySelector('input') as HTMLInputElement | null)?.focus({ preventScroll: true }); }
+    else setEditing((e) => !e);
+  };
   const pill = !approved ? <span className="pill blue">Draft · recalculates live</span>
     : !v2 ? <span className="pill live"><i />Approved</span>
     : derived.hasDraft ? <span className="pill draft">Draft · not live</span>
@@ -65,6 +103,9 @@ export function PlanCard({ onAsk }: { onAsk?: (q: string) => void }) {
         {pill}
       </div>
       {v2 && <DraftBar />}
+      <InputsCheck onEdit={() => { if (!editing) edit(); }} />
+      {editing && <SetupCard embedded />}
+      {p.overBudget && <p className="plan-note warn">Your overrides take spend to {inr(p.spend)}, over the {inr(settings.budget)} budget. The hard stop switches offers off once it runs out; raise the budget or remove an override.</p>}
       {allNone && <p className="plan-note warn">At {num(margin * 100)}% margin no offer pays back; the honest plan is no offers.</p>}
       {p.infeasible && (
         <p className="plan-note warn">
@@ -77,7 +118,7 @@ export function PlanCard({ onAsk }: { onAsk?: (q: string) => void }) {
           <thead><tr><th>Shopper group</th><th>Buys without offer</th><th>Offer</th><th>{RETURN_LABEL}</th><th>Profit / month</th></tr></thead>
           <tbody>
             {p.rows.map((r) => {
-              const g = model.groups.find((x) => x.id === r.group)!;
+              const g = derived.planGroups.find((x) => x.id === r.group) ?? model.groups.find((x) => x.id === r.group)!;
               return [
                 <tr key={r.group}>
                   <td>{shortGroup(r.label)}<span className="sub">{num(g.checkouts)} checkouts / month</span></td>
@@ -131,10 +172,11 @@ export function PlanCard({ onAsk }: { onAsk?: (q: string) => void }) {
         {approved ? (
           derived.hasDraft ? <span className="pill draft">Approve or discard the draft above</span> : <span className="pill live"><Check width={14} /> Live since approval</span>
         ) : (
-          <button className="btn primary" onClick={approve} disabled={allNone}>Approve &amp; go live</button>
+          <button className="btn primary" onClick={approve} disabled={allNone || pending.length > 0} title={pending.length ? 'Confirm your numbers first' : undefined}>Approve &amp; go live</button>
         )}
-        <a href="#setup-card" className="btn secondary">Edit</a>
-        {onAsk && <button className="btn ghost" onClick={() => onAsk('What if my margin is 30%?')}>What if margin is 30%?</button>}
+        <button className="btn secondary" onClick={edit} aria-expanded={inlineSetup ? editing : undefined}>{editing ? 'Done editing' : 'Edit'}</button>
+        {onAsk && <button className="btn ghost" onClick={() => onAsk('What if my margin is lower?')}>What if my margin is lower?</button>}
+        {!approved && pending.length > 0 && <span className="small muted plan-gate">Approve unlocks once each input is yours or a typical value you accepted.</span>}
       </div>
     </div>
   );

@@ -28,8 +28,8 @@ export function tourV2Steps(deps: { ask: (q: string) => Promise<void>; setShoppe
     { route: '/ray', caption: (d) => `Ray: "Anything I should fix?" → ${d.signals.filter((s) => s.breached).length} signals over their thresholds, and how Ray found them`, run: () => { useChat.getState().clear(); return ask('Anything I should fix?'); } },
     { route: '/ray', caption: (d) => `Why AI, not a simple rule: same shoppers, same ${inr(d.draftComparison.budget)} budget → ${d.draftComparison.rows.map((r) => inrSigned(r.profit)).join(' vs ')} a month`, run: () => ask('Why AI, not a simple rule?') },
     {
-      route: '/ray', caption: (_d, m) => `Setup in 4 questions → an offer or none per group. Why? shows the playbook (${num(m.pool.size)} stores like yours) beside your store`,
-      run: async () => { await ask('Set up Smart Offers'); await ask('₹1,00,000'); await ask(`₹${DEFAULT_KEEP_PER_1000}`); await ask('Most profit'); await ask('Yes'); later(350, () => (document.querySelector('#plan-card .whyl') as HTMLButtonElement | null)?.click()); scrollTo('.pb-side', 600); },
+      route: '/ray', caption: (d, m) => `Setup asks for your numbers, never assumes them: typical values for ${d.benchmark.ok ? d.benchmark.peerLabel.toLowerCase() : 'stores your size'} are shown, you answer or accept. Why? shows the playbook (${num(m.pool.size)} stores like yours)`,
+      run: async () => { await ask('Set up Smart Offers'); await ask('₹1,00,000'); await ask(`₹${DEFAULT_KEEP_PER_1000}`); await ask('Most profit'); await ask('Use typical for the rest'); later(350, () => (document.querySelector('#plan-card .whyl') as HTMLButtonElement | null)?.click()); scrollTo('.pb-side', 600); },
     },
     { route: '/ray', caption: () => `Approve the plan and the experiment space (tests on at most ${pctOf(TRAFFIC_SHARE, 0)} of a group). Only a human click spends money`, run: () => { st().approve(); scrollTo('.ok-card'); } },
     {

@@ -106,7 +106,7 @@ export function About() {
         <div>
           <h2>Risks and how we handle them</h2>
           <ul className="plain">
-            <li><b>Wrong margin flips the plan.</b> Margin asked in plain words, sanity check, "what if 30%" scenario.</li>
+            <li><b>Wrong margin flips the plan.</b> Margin asked in plain words, never assumed: typical values for stores this size are shown and must be confirmed before Approve; a sanity check and the margin-squeeze table show what a lower margin costs.</li>
             <li><b>Small groups take long to prove.</b> Ranges, "still learning", no decisions before day 14, fee on the lower bound.</li>
             <li><b>Runaway spend.</b> Budget hard stop, daily cap, ₹250 per order, one offer per order.</li>
             <li><b>Checkout slows down.</b> {FEATURES.heroMetric ? "Checkout reads tonight's decision table" : 'Lookup table'}, 50 ms budget, store default on failure.</li>

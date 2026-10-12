@@ -1,20 +1,24 @@
 import { useCallback } from 'react';
 import { useModel } from '../state/ModelContext';
 import { useStore } from '../state/store';
-import { route, FOLLOW_UPS, type RayCard, type QuickReply } from './demoRouter';
+import { FOLLOW_UPS, type RayCard, type QuickReply } from './demoRouter';
 import { askLive } from './liveClient';
 import { useChat } from './chatStore';
-import { question, parseAnswer, SETUP_ORDER } from './setupFlow';
-import { T } from './templates';
-import { tools, type Draft, type RayCtx, type ToolCall } from './tools';
+import { type Draft, type RayCtx, type ToolCall } from './tools';
+import { converse } from './converse';
 import { ledgerView } from '../data/ledgerQueries';
-import { FEATURES } from '../config/features';
 
-const draftSummary = (d: Draft) => (d.type === 'override' ? `Drafted: ${d.group} → ${d.offer}` : d.type === 'pause' ? `Drafted pause (${d.scope})` : `Drafted: ${d.summary}`);
+const draftSummary = (d: Draft) => (d.type === 'override' ? `Drafted: ${d.group} → ${d.offer}` : d.type === 'pause' ? `Drafted pause (${d.scope})` : d.type === 'resume' ? 'Drafted resume' : `Drafted: ${d.summary}`);
 
-/** Cards for a live answer, built from the tools Claude called (last one of each kind, at most two). */
-function cardsFromCalls(calls: ToolCall[]): { cards: RayCard[]; quick: QuickReply[] } {
+type Sim = Extract<RayCard, { kind: 'sim' }>['sim'];
+
+/**
+ * Cards for a live answer, built from the tools Claude called. Every simulate_plan call is kept, in order, so a
+ * reply that compares scenarios shows all of them (titled by what changed), never just the last one.
+ */
+export function cardsFromCalls(calls: ToolCall[]): { cards: RayCard[]; quick: QuickReply[] } {
   const byKind = new Map<string, RayCard>();
+  const sims: Sim[] = [];
   let quick: QuickReply[] = [];
   for (const c of calls) {
     const r = c.result as Record<string, unknown>;
@@ -25,8 +29,8 @@ function cardsFromCalls(calls: ToolCall[]): { cards: RayCard[]; quick: QuickRepl
       case 'list_payments': byKind.set('list', { kind: 'payments_list', title: 'Payments', data: r as never }); quick = FOLLOW_UPS.payments; break;
       case 'get_settlements': byKind.set('settlements', { kind: 'settlements', data: r as never }); quick = FOLLOW_UPS.settlements; break;
       case 'get_refunds_and_disputes': byKind.set('refunds', { kind: 'refunds', data: r as never }); quick = FOLLOW_UPS.refunds; break;
-      case 'simulate_plan': byKind.set('sim', { kind: 'sim', title: FEATURES.rayV2 ? 'Scenario (not applied)' : 'Plan preview (not applied)', sim: r as never }); quick = FOLLOW_UPS.plan; break;
-      case 'get_current_plan': byKind.set('sim', { kind: 'sim', title: 'Current plan', sim: r as never }); quick = FOLLOW_UPS.plan; break;
+      case 'simulate_plan': sims.push(r as unknown as Sim); quick = FOLLOW_UPS.plan; break;
+      case 'get_current_plan': if (!sims.length) byKind.set('sim', { kind: 'sim', title: 'Current plan', sim: r as never }); quick = FOLLOW_UPS.plan; break;
       case 'get_offer_waste': byKind.set('waste', { kind: 'waste' }); quick = FOLLOW_UPS.offers; break;
       case 'get_results': byKind.set('results', { kind: 'results', data: r as never }); quick = FOLLOW_UPS.results; break;
       case 'get_creator_code_report': byKind.set('creators', { kind: 'creators' }); quick = FOLLOW_UPS.offers; break;
@@ -37,11 +41,21 @@ function cardsFromCalls(calls: ToolCall[]): { cards: RayCard[]; quick: QuickRepl
       case 'get_pilot_decision': byKind.set('decision', { kind: 'decision' }); quick = FOLLOW_UPS.results; break;
       case 'get_impact_summary': byKind.set('impact', { kind: 'impact' }); quick = FOLLOW_UPS.results; break;
       case 'get_next_experiments': byKind.set('experiments', { kind: 'experiments' }); quick = FOLLOW_UPS.results; break;
-      case 'draft_plan_change': case 'request_pause': case 'draft_settings_change': { const d = (r as { draft?: Draft }).draft; if (d) byKind.set('draft', { kind: 'draft', draft: d }); break; }
+      case 'get_tradeoffs': byKind.set('tradeoff', { kind: 'tradeoff', view: (r as { view?: string }).view === 'margin' ? 'margin' : 'growth' }); quick = FOLLOW_UPS.plan; break;
+      case 'get_recommended_offers': byKind.set('recommendations', { kind: 'recommendations' }); quick = FOLLOW_UPS.plan; break;
+      case 'get_setup_benchmarks': byKind.set('inputs', { kind: 'inputs' }); quick = FOLLOW_UPS.plan; break;
+      case 'draft_plan_change': case 'request_pause': case 'request_resume': case 'draft_settings_change': { const d = (r as { draft?: Draft }).draft; if (d) byKind.set('draft', { kind: 'draft', draft: d }); break; }
       default: break;
     }
   }
-  return { cards: [...byKind.values()].slice(-2), quick };
+  const title = (s: Sim) => `Scenario: ${s.scenario} (not applied)`;
+  const simCards: RayCard[] = sims.length === 1 ? [{ kind: 'sim', title: title(sims[0]), sim: sims[0] }]
+    : sims.length > 1 ? [{ kind: 'scenarios', items: sims.slice(-4).map((s) => ({ title: s.scenario, sim: s })) }] : [];
+  const draft = byKind.get('draft');
+  byKind.delete('draft');
+  // At most two cards: scenarios first, then the most relevant other card; a draft always shows.
+  const cards = [...simCards, ...[...byKind.values()].slice(-(simCards.length ? 1 : 2))].slice(0, 2);
+  return { cards: draft ? [...cards.slice(0, 1), draft] : cards, quick };
 }
 
 /** Ask Ray. Setup is a guided flow; privacy refusals are always local; everything else goes to Claude in Live mode. */
@@ -52,45 +66,21 @@ export function useRay() {
     if (!text.trim() || chat.busy) return;
     // Read the latest inputs at call time (the demo player calls this several times in a row).
     const st = useStore.getState();
-    const ctx: RayCtx = { model, derived, settings: st.settings, approved: st.approved, killed: st.killed, ledger: ledgerView(st.moment, st.instantSettlements), settlementMode: st.settlementMode, instant: st.instantSettlements, day: st.snapshot, reviewDecisions: st.reviewDecisions };
+    const ctx: RayCtx = { model, derived, settings: st.settings, approved: st.approved, killed: st.killed, ledger: ledgerView(st.moment, st.instantSettlements), settlementMode: st.settlementMode, instant: st.instantSettlements, day: st.snapshot, reviewDecisions: st.reviewDecisions, confirmed: st.confirmed };
     const rayMode = st.rayMode;
     chat.push({ role: 'user', text });
-    const festive = model.profile.upcomingDrop.name;
 
-    // Guided setup.
-    if (chat.setup) {
-      if (/^(cancel|stop|exit|quit)\b/i.test(text.trim())) { chat.setSetup(null); chat.push({ role: 'ray', text: 'Setup cancelled. Nothing changed.', via: 'setup' }); return; }
-      const step = chat.setup;
-      const a = parseAnswer(step, text);
-      if (!a.ok) { const q = question(step, festive); chat.push({ role: 'ray', text: a.hint, quick: q.quick, via: 'setup' }); return; }
-      useStore.getState().setSettings(a.patch);
-      const next = SETUP_ORDER[SETUP_ORDER.indexOf(step) + 1];
-      if (next) {
-        const q = question(next, festive);
-        chat.setSetup(next);
-        chat.push({ role: 'ray', text: (a.note ? a.note + '\n\n' : '') + q.text, quick: q.quick, via: 'setup' });
-        return;
-      }
-      chat.setSetup(null);
-      const s = tools.simulate_plan({ ...ctx, settings: useStore.getState().settings }, {});
-      chat.push({ role: 'ray', text: T.plan(s), cards: [{ kind: 'plan_live' }], quick: FOLLOW_UPS.plan, via: 'setup' });
-      return;
-    }
-
-    const local = route(text, ctx);
-    if (local.startSetup) {
-      const q = question('budget', festive);
-      chat.setSetup('budget');
-      chat.push({ role: 'ray', text: `${local.text}\n\n${q.text}`, quick: q.quick, via: 'setup' });
-      return;
-    }
+    const turn = converse(text, ctx, { setup: chat.setup, last: chat.last });
+    for (const p of turn.patches ?? []) useStore.getState().setSettings(p.patch, p.source);
+    chat.setSetup(turn.setup);
+    chat.setLast(turn.last);
     const logDraft = useStore.getState().logDraft;
     const answerLocally = (note?: string) => {
-      if (local.card?.kind === 'draft') logDraft(draftSummary(local.card.draft));
-      chat.push({ role: 'ray', text: local.text, cards: local.card ? [local.card] : undefined, quick: local.quick, refused: local.refused, via: 'demo', note });
+      if (turn.reply?.card?.kind === 'draft') logDraft(draftSummary(turn.reply.card.draft));
+      for (const m of turn.messages) chat.push(note ? { ...m, note } : m);
     };
     const h = chat.health;
-    if (local.refused || rayMode === 'demo') return answerLocally();
+    if (!turn.liveEligible || rayMode === 'demo') return answerLocally();
     if (h.state !== 'ready') return answerLocally(h.state === 'off' ? `Live mode unavailable: ${h.reason} Answered in Demo mode.` : undefined);
 
     chat.setBusy(true);

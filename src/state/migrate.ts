@@ -15,7 +15,9 @@ export function sameSettings(a: Settings | null | undefined, b: Settings | null 
   if (!a || !b) return a === b;
   return a.budget === b.budget && a.keepPer1000 === b.keepPer1000 && a.goal === b.goal && a.ordersFloorPct === b.ordersFloorPct
     && a.festiveWindow === b.festiveWindow && a.maxDiscountInr === b.maxDiscountInr
-    && a.allowedOffers.length === b.allowedOffers.length && a.allowedOffers.every((o) => b.allowedOffers.includes(o));
+    && a.allowedOffers.length === b.allowedOffers.length && a.allowedOffers.every((o) => b.allowedOffers.includes(o))
+    && (a.minReturn ?? null) === (b.minReturn ?? null)
+    && (a.growth?.metric ?? null) === (b.growth?.metric ?? null) && (a.growth?.giveUpInr ?? 0) === (b.growth?.giveUpInr ?? 0);
 }
 
 type V1Shape = { settings?: Settings; approved?: boolean; approvedSettings?: Settings | null; audit?: AuditEntry[] } & Record<string, unknown>;

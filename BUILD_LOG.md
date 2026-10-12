@@ -95,7 +95,42 @@ How AI tools were used, what they did, how they sped up the work, and where I ma
 
 - Phase 10 (flag `leakRadar`, stretch): ALPHA10 leak radar on Offers & Coupons (synthetic referrers, simulated single-use switch). Tests 167 passing; build passes.
 
+### 2026-10-11 — v3: Praveen's review of the live site (branch `claude/confident-wozniak-42snhx`)
+Feedback: Ray assumed numbers (4x, 30%, ₹50,000 chips), said "I couldn't run that scenario" after offering it, a scenario card that didn't match Ray's recommendation, a dead Edit button in the chat plan, no visible recommended offers beyond the menu, and no way to see what growth costs.
+- Baseline audit first: 225 scripted merchant conversations × 6 store states (1,350 runs) through Ray's conversation core → 588 invariant failures in 87 scenarios (402 fell through to generic help, 96 card/text mismatches, 48 offered a next step that "yes" couldn't do). Headless click-sweep of 12 screens: 2 real dead buttons (chat plan Edit; "Waiting on you" items on the reviews tab).
+- Part A (engine + data, ~1 h): seeded store economics for the 1,200-store network (separate seed, offer-test data unchanged) and a privacy-guarded `getStoreBenchmark` by category × monthly-sales band (≥ 20 stores, no store > 25% of the band's sales, rounded). Growth frontier (`growthSteps` in plan.ts, `growthFrontier` in tradeoffs.ts) with an optional `growth` setting; every frontier point is rebuilt through `buildPlan`, so choosing it reproduces it. Margin squeeze (what a lower margin drops, and what keeping today's new customers would cost). Recommended offers (`recommend.ts`) scored by the plan engine from the playbook and from standard offers removed from the menu. New settings `minReturn` and `growth`, and per-input confirmations in the store. Ray tools now price scenarios on the same groups as the plan card. Tests 203 passing (11 new); build passes.
+
+- Part B (screens, ~1.5 h): Setup card shows every input's typical range for stores this size with "Use typical", a Yours / Typical, accepted / Not confirmed marker, and new editable minimum return and max discount. The plan lists unconfirmed inputs ("Use these typical values" / "Enter my own") and keeps Approve disabled until each is confirmed. Edit in the chat plan card now opens the inputs inline (it was an anchor to a card that only exists on the Setup & plan page). New cards on Setup & plan: Recommended offers not on your menu (engine-scored, "Add to my menu" makes a draft) and Trade-offs you choose (grow more / earn less with "Use this", and the margin squeeze). "Waiting on you" items now open and scroll to the exact review item. Browser QA: 40 checks pass at 1366 and 390 px.
+
+- Part C (Ray, ~2.5 h):
+  - **Live tools.**
+    - `simulate_plan` takes per-group overrides, menu changes, max discount, minimum return and growth, and returns a scenario name.
+    - New tools: `get_tradeoffs`, `get_recommended_offers`, `get_setup_benchmarks`, `request_resume`.
+    - `draft_settings_change` covers menu, max discount, minimum return, festive rule and growth.
+    - System-prompt rules 12–15: never assume numbers; offer only what the tools can do and do it on "yes"; every scenario is a card; which tool to use for growth, squeeze and offers.
+  - **Cards.** Every simulate_plan call becomes a card; several become one comparison table in call order (the ₹33,062 vs ₹94,665 mismatch).
+  - **Demo mode.**
+    - A pure conversation core (`converse.ts`, also used by the tests).
+    - Follow-ups act on "yes", "go with that", "draft that", "what about 35%?", "why?" and "give them…".
+    - Typos and Hinglish are understood.
+    - The setup asks every input with typical values and offers "use typical for the rest".
+    - Typical values are flagged in every answer that uses them; chips depend on the store's state.
+  - **Checks.** 250 conversations × 6 states run as a test (`scenarios/conversations.test.ts`) with 14 invariants; 0 failures (588 before). Two transcript reviews by a separate agent were turned into those invariants. Tests 227 passing; build passes.
+
+- Part D (Live role-play fixes and QA, ~1.5 h):
+  - An agent played Live Ray with the real prompt and tools over 18 conversations. It found:
+    - plan ranges for playbook offers that excluded their own estimate;
+    - an unknown pause scope widening to "all";
+    - override drafts silently over budget;
+    - a greedy budget step that left profitable budget unused;
+    - a ₹1 rounding miss in growth;
+    - unclear labels.
+  - All fixed, and each has a regression test in `v3.live.test.ts`. Tests 231 passing; build passes.
+  - Browser: 40 v3 checks, 164 sweep checks, button sweep and the 14-step tour all clean.
+
 <!-- Claude Code adds unclear spec points here with the option it chose. -->
+- v3: the plan optimiser's budget step (greedy downgrade by least profit lost per rupee) could leave budget unused when a cheaper profitable offer still fit (₹80,000: ₹17,755 planned vs ₹19,031 possible). Chose: add a refill pass after the downgrades, in both `src/engine/plan.ts` and `docs/reference_engine.py`, and regenerate `fixtures/expected_outputs.json` with the script. The expected outputs did not change (the ₹1,00,000 and ₹50,000 cases already used the room).
+- v3: "don't assume, ask" vs a demo that opens with numbers already filled. Chose: keep the starting values but label them as typical values for stores this size (computed from the synthetic network), require the merchant to confirm or change each input before Approve, and calibrate the synthetic band so its medians equal the starting values (₹500 keep, ₹1,00,000 budget), documented in `network.ts`.
 - v2 §10 defaults say COD fails 28%; the fixture says Alpha's failed-COD rate is 22% (and the 81% kept rate uses it). Chose: the fixture's 22% everywhere. At 22% a blanket ₹50 prepaid discount loses in all 6 groups; the insight copy is computed and says so.
 - v2 §7.2's decision rule ("challenger lower bound ≥ champion − tolerance") cannot promote with ~38 challenger shoppers. Chose: blend the store's result with the playbook (same trust weighting as the plan) and require cost lower, profit per shopper at least equal, and the store's lift gap within noise.
 - v2 §3.2 expects ALPHA10 ₹746 per extra order and ₹617 earned; the engine gives ₹730 (254.8 extra orders) and ₹614 (store AOV ₹1,516). Chose: keep the engine values and report them.

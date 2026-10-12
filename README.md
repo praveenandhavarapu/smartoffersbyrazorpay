@@ -26,7 +26,7 @@ A dashboard in the style of a payments console (no brand assets; concept label a
 | Transactions | `/transactions` | Payments, Orders, Refunds, Disputes with filters, search and a detail drawer |
 | Settlements | `/settlements` | T+1 settlements; instant on-demand "Settle now" when enabled |
 | Reports | `/reports` | Download CSV reports (settlements, recon, payments, offers, refunds, orders) |
-| Offers & Coupons | `/offers`, `/offers/smart` | Coupons, and Smart Offers: results, setup & plan, checkout preview, creator codes |
+| Offers & Coupons | `/offers`, `/offers/smart` | Coupons, and Smart Offers: results, setup & plan (your numbers with typical values for stores your size, recommended offers not on your menu, growth-vs-profit and margin-squeeze trade-offs), checkout preview, creator codes |
 | Ray AI | `/ray` | Chat with Ray. Live (Claude) or Demo toggle; guided setup; cards and follow-up suggestions |
 | Agent Studio | `/studio`, `/studio/smart-offers` | Smart Offers Agent: daily 06:00 runs, transactions it decided, guardrails, activity log, kill switch |
 | Agent Studio → Weekly reviews / Impact | `/studio/smart-offers?tab=reviews`, `?tab=impact` | Monday reviews with approvals; north-star metric, outcomes, funnel, engagement, prediction accuracy, guardrails |
@@ -36,7 +36,7 @@ A dashboard in the style of a payments console (no brand assets; concept label a
 
 **Product lifecycle in the prototype:**
 - **Find:** Ray's opportunity signals with thresholds, plus a notification bell.
-- **Decide and approve:** "why AI, not a rule" on the same shoppers; plan with holdout cost; Approve.
+- **Decide and approve:** the merchant gives each input (or accepts a typical value for stores their size; nothing is assumed); "why AI, not a rule" on the same shoppers; plan with holdout cost; trade-offs they choose; Approve.
 - **Run:** daily 06:00 agent runs.
 - **Prove:** results against the holdout, and predicted vs measured lift.
 - **Review weekly:** Monday reviews, no verdicts before day 14, approve changes.
