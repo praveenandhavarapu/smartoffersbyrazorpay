@@ -6,6 +6,7 @@ import { askLive } from './liveClient';
 import { useChat } from './chatStore';
 import { type Draft, type RayCtx, type ToolCall } from './tools';
 import { converse } from './converse';
+import { resumeChip } from './setupFlow';
 import { ledgerView } from '../data/ledgerQueries';
 
 const draftSummary = (d: Draft) => (d.type === 'override' ? `Drafted: ${d.group} → ${d.offer}` : d.type === 'pause' ? `Drafted pause (${d.scope})` : d.type === 'resume' ? 'Drafted resume' : `Drafted: ${d.summary}`);
@@ -68,11 +69,12 @@ export function useRay() {
     const st = useStore.getState();
     const ctx: RayCtx = { model, derived, settings: st.settings, approved: st.approved, killed: st.killed, ledger: ledgerView(st.moment, st.instantSettlements), settlementMode: st.settlementMode, instant: st.instantSettlements, day: st.snapshot, reviewDecisions: st.reviewDecisions, confirmed: st.confirmed };
     const rayMode = st.rayMode;
+    const prev = [...chat.messages].reverse().find((m) => m.role === 'ray')?.text;
     chat.push({ role: 'user', text });
 
-    const turn = converse(text, ctx, { setup: chat.setup, last: chat.last });
+    const turn = converse(text, ctx, { setup: chat.setup, last: chat.last, paused: chat.setupPaused, unclear: chat.setupUnclear, prev });
     for (const p of turn.patches ?? []) useStore.getState().setSettings(p.patch, p.source);
-    chat.setSetup(turn.setup);
+    chat.setSetup(turn.setup, turn.paused, turn.unclear);
     chat.setLast(turn.last);
     const logDraft = useStore.getState().logDraft;
     const answerLocally = (note?: string) => {
@@ -88,7 +90,9 @@ export function useRay() {
     chat.setBusy(false);
     if (!live.ok) return answerLocally(`Live mode error: ${live.reason} Answered in Demo mode.`);
     chat.setLiveHistory(live.history);
-    const { cards, quick } = cardsFromCalls(live.toolCalls);
+    const { cards, quick: liveQuick } = cardsFromCalls(live.toolCalls);
+    // Setup paused: keep a way back to it.
+    const quick = turn.paused ? [resumeChip(turn.paused, useStore.getState().settings), ...liveQuick].slice(0, 5) : liveQuick;
     for (const c of cards) if (c.kind === 'draft') logDraft(draftSummary(c.draft));
     chat.push({ role: 'ray', text: live.text, cards, quick, via: 'live' });
   }, [model, derived]);

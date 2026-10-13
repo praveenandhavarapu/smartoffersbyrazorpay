@@ -128,7 +128,59 @@ Feedback: Ray assumed numbers (4x, 30%, ₹50,000 chips), said "I couldn't run t
   - All fixed, and each has a regression test in `v3.live.test.ts`. Tests 231 passing; build passes.
   - Browser: 40 v3 checks, 164 sweep checks, button sweep and the 14-step tour all clean.
 
+### 2026-10-13 — v3.1 Part A: questions in the middle of setup (tester bug)
+- **Bug (from a tester's stress test).** At the offers question the tester asked:
+  - "are there other possible options you can come up with?"
+  - "no, you tell me other ideas for offers"
+  - "no, look at my competitors. what discounts are they using?"
+
+  Ray answered all three with the same line: 'Say "keep these", name the offers…'.
+- **Root cause.**
+  - During setup, `converse.ts` sent every message to `parseAnswer()`. Anything that wasn't an answer got the step's fixed hint, with Live mode off, so neither `route()` nor Live ever saw the question.
+  - `parseAnswer()` also saved questions that contained a value as the merchant's own input:
+    - "is ₹50,000 too little?" set the budget;
+    - "what happens if I remove ₹200 off?" removed the offer;
+    - "what does free shipping actually do for me?" accepted the menu;
+    - "no idea what the festive drop is, explain?" turned the festive rule off.
+  - Nothing stopped Ray sending the same text twice, and no scripted conversation asked a question mid-setup.
+- **What changed (src/ray and tests only).**
+  - `classifySetupTurn()` in `setupFlow.ts` runs before anything is saved and returns answer, question, what_if, nav or unclear. Answers are setup chips, bare values, commands and a short yes/no at the rules step. A question is never an answer, even when it contains a value.
+  - **Questions** get the answer they would get outside setup. Where the router has no rule, a fallback uses the current step:
+    - recommended offers at the offers step;
+    - the step's typical values for stores this size;
+    - or why the question is asked, with the merchant's numbers.
+
+    Then "Back to Q<n>: …" with that step's chips plus "Pause setup". Nothing is saved.
+  - **What-ifs** ("is ₹50,000 too little?", "what happens if I remove ₹200 off?") run `simulate_plan`, show the scenario card and compare it with the inputs so far. The "Use <value>" chip saves the value.
+
+    A value for a different question (e.g. a budget asked at the offers question) shows that scenario. If that question is already answered, it offers "Change my budget"; otherwise it says when Ray will ask.
+  - **Navigation:**
+    - back;
+    - skip (uses the typical value, marked typical, and names it);
+    - change my budget, margin, goal, offers, minimum return or rules;
+    - start over (earlier answers come back as Keep chips);
+    - pause, later, stop or cancel (answers are kept, and every reply carries "Resume setup at Q<n>" until resumed);
+    - where are we (each answer marked as yours or typical).
+  - **Unclear answers escalate:**
+    1. the hint plus what the question means in plain words;
+    2. other words, an example answer, "Use typical for this one" and "Ask something else";
+    3. setup pauses with a resume chip.
+  - Ray never sends a message identical to its previous one.
+- **New invariants** in `scenarios/harness.ts`. They run on all 1,500 corpus runs and the new wanderer corpus (24 mid-setup side questions × fresh and live20):
+  - (a) no Ray message identical to the previous one;
+  - (b) no setup input saved from a question or what-if;
+  - (c) a side question re-asks the same step or offers to resume;
+  - (d) no reply is only a usage hint.
+- **Checks.**
+  - Tests: 277 pass (46 new, in `v3.setup-side.test.ts` and the wanderer tests); the build passes.
+  - Browser (Demo mode, 1366 and 390 px): 32 of 32 checks pass. They cover the tester's transcript, pause/resume, a budget what-if asked at Q4, no horizontal scroll, and all 14 Play demo steps.
+- **Report only (outside setup, not fixed this session).** Invariant (d) fails in 5 existing conversations × 6 states, where the whole reply is the generic help list: "what can you do?", "asdfgh", "?", "how's the weather", "tell me a joke". Part B's help fallback is meant to fix these.
+- Time: about 1.5 h.
+
 <!-- Claude Code adds unclear spec points here with the option it chose. -->
+- v3.1: the "Max ₹150 off" setup chip (message "max ₹150") also adds ₹150 off to the menu, because the offer parser reads "₹150" as that offer. The brief says chips must save exactly as before, so I left it. Suggested fix: ignore the amount after "max" when looking for offers.
+- v3.1: "skip" at the rules step used to mean "no rule". The brief says skip uses the typical value, so it now uses the typical rule for stores this size. At the growth step there is no typical amount, so skip keeps the most-profit plan.
+- v3.1: "cancel" or "stop" during setup used to say "Setup cancelled. Nothing changed.", which was untrue once earlier answers were saved. Chose: they now pause setup and say the answers so far are kept.
 - v3: the plan optimiser's budget step (greedy downgrade by least profit lost per rupee) could leave budget unused when a cheaper profitable offer still fit (₹80,000: ₹17,755 planned vs ₹19,031 possible). Chose: add a refill pass after the downgrades, in both `src/engine/plan.ts` and `docs/reference_engine.py`, and regenerate `fixtures/expected_outputs.json` with the script. The expected outputs did not change (the ₹1,00,000 and ₹50,000 cases already used the room).
 - v3: "don't assume, ask" vs a demo that opens with numbers already filled. Chose: keep the starting values but label them as typical values for stores this size (computed from the synthetic network), require the merchant to confirm or change each input before Approve, and calibrate the synthetic band so its medians equal the starting values (₹500 keep, ₹1,00,000 budget), documented in `network.ts`.
 - v2 §10 defaults say COD fails 28%; the fixture says Alpha's failed-COD rate is 22% (and the 81% kept rate uses it). Chose: the fixture's 22% everywhere. At 22% a blanket ₹50 prepaid discount loses in all 6 groups; the insight copy is computed and says so.
