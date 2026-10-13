@@ -11,9 +11,13 @@ import type { Model } from '../../../state/model';
 import { ledgerView } from '../../../data/ledgerQueries';
 import { inrSigned } from '../../../lib/format';
 import type { Scenario } from './corpus';
+import { classifySetupTurn, parseAnswer, type SetupTurnKind } from '../../setupFlow';
+import type { SetupStep } from '../../chatStore';
+import { T } from '../../templates';
 
 export type StateId = 'fresh' | 'live20' | 'live30' | 'draft' | 'killed' | 'margin40';
-export type Issue = { scenario: string; state: StateId; turn: number; text: string; problem: string; reply: string };
+/** reportOnly: a newer invariant broken outside setup (listed in BUILD_LOG, not yet fixed). */
+export type Issue = { scenario: string; state: StateId; turn: number; text: string; problem: string; reply: string; reportOnly?: boolean };
 
 type StoreSim = DerivedInput & { moment: NonNullable<DerivedInput['moment']>; confirmed?: Partial<Record<InputKey, InputSource>> };
 
@@ -36,7 +40,12 @@ export function ctxFor(model: Model, st: StoreSim): RayCtx {
   };
 }
 
-export type Exchange = { user: string; msgs: RayMsg[]; intent?: string; ctx: RayCtx; reply?: RayReply };
+export type Exchange = {
+  user: string; msgs: RayMsg[]; intent?: string; ctx: RayCtx; reply?: RayReply;
+  /** Setup step before the turn, and how the turn was read at that step. */
+  setupBefore: SetupStep | null; cls?: SetupTurnKind;
+  setup: SetupStep | null; paused?: SetupStep | null; patches: NonNullable<ReturnType<typeof converse>['patches']>; settings: Settings;
+};
 
 export function runConversation(model: Model, sc: Scenario, stateId: StateId): Exchange[] {
   let st = initialState(stateId);
@@ -44,10 +53,11 @@ export function runConversation(model: Model, sc: Scenario, stateId: StateId): E
   const out: Exchange[] = [];
   for (const text of sc.turns) {
     const ctx = ctxFor(model, st);
+    const cls = conv.setup ? classifySetupTurn(conv.setup, text, { ctx, settings: ctx.settings }) : undefined;
     const t = converse(text, ctx, conv);
-    out.push({ user: text, msgs: t.messages, intent: t.intent ?? t.reply?.intent ?? (t.setup || t.patches ? 'setup' : undefined), ctx, reply: t.reply });
-    conv = { setup: t.setup, last: t.last };
     for (const p of t.patches ?? []) st = { ...st, settings: { ...st.settings, ...p.patch }, confirmed: { ...st.confirmed, ...Object.fromEntries(inputKeysOf(p.patch).map((k) => [k, p.source])) } };
+    out.push({ user: text, msgs: t.messages, intent: t.intent ?? t.reply?.intent ?? (t.setup || t.patches ? 'setup' : undefined), ctx, reply: t.reply, setupBefore: conv.setup, cls, setup: t.setup, paused: t.paused, patches: t.patches ?? [], settings: st.settings });
+    conv = { setup: t.setup, last: t.last, paused: t.paused, unclear: t.unclear, prev: t.messages[t.messages.length - 1]?.text ?? conv.prev };
   }
   return out;
 }
@@ -68,10 +78,30 @@ function cardProblems(text: string, cards: RayCard[] | undefined): string[] {
 export function checkConversation(model: Model, sc: Scenario, stateId: StateId): Issue[] {
   const issues: Issue[] = [];
   const ex = runConversation(model, sc, stateId);
+  let prevText: string | undefined;
   ex.forEach((e, i) => {
     const last = i === ex.length - 1;
-    const add = (problem: string, m?: RayMsg) => issues.push({ scenario: sc.id, state: stateId, turn: i + 1, text: e.user, problem, reply: (m?.text ?? e.msgs.map((x) => x.text).join(' | ')).slice(0, 220) });
+    const add = (problem: string, m?: RayMsg, reportOnly?: boolean) => issues.push({ scenario: sc.id, state: stateId, turn: i + 1, text: e.user, problem, reply: (m?.text ?? e.msgs.map((x) => x.text).join(' | ')).slice(0, 220), ...(reportOnly ? { reportOnly } : {}) });
     if (!e.msgs.length) add('no reply');
+    // Setup side questions (v3.1). Broken outside setup = report-only for now.
+    const outside = !e.setupBefore && !e.setup;
+    for (const m of e.msgs) {
+      if (prevText !== undefined && m.text.trim() === prevText.trim()) add('repeats the previous Ray message word for word', m, outside);
+      prevText = m.text;
+    }
+    const side = e.cls === 'question' || e.cls === 'what_if';
+    if (side && e.patches.length) add(`a ${e.cls} saved a setup input`);
+    if (side && e.setupBefore) {
+      const lm = e.msgs[e.msgs.length - 1];
+      const reasks = e.setup === e.setupBefore && /Back to Q\d+:/.test(lm?.text ?? '');
+      const resume = Boolean(e.paused) && (lm?.quick ?? []).some((q) => /^Resume setup/.test(q.message));
+      if (!reasks && !resume) add('side question in setup does not re-ask the question or offer to resume', lm);
+    }
+    if (e.setupBefore) {
+      const p = parseAnswer(e.setupBefore, e.user, { ctx: e.ctx, settings: e.ctx.settings });
+      if (!p.ok && e.msgs.some((m) => m.text.trim() === p.hint)) add('reply is only a usage hint');
+    }
+    if (e.msgs.some((m) => m.text.trim() === T.help())) add('reply is only a usage hint (generic help list)', undefined, outside);
     for (const m of e.msgs) {
       if (!m.text.trim()) add('empty reply', m);
       if (BAD_TOKENS.test(m.text)) add('bad token in text', m);
@@ -84,7 +114,7 @@ export function checkConversation(model: Model, sc: Scenario, stateId: StateId):
       for (const p of cardProblems(m.text, m.cards)) add(p, m);
       // Every quick reply must lead somewhere (not the generic help).
       for (const q of m.quick ?? []) {
-        if (e.intent === 'setup' || m.via === 'setup') continue;
+        if (e.intent === 'setup' || m.via === 'setup' || q.message === 'Resume setup') continue;
         const r = route(q.message, e.ctx);
         if (r.intent === 'help') add(`quick reply "${q.label}" falls through to help`, m);
       }

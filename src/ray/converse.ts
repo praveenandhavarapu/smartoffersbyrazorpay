@@ -3,22 +3,32 @@
  * stores; the scenario tests call it directly, so tests exercise exactly what the app does.
  * v3: "yes" runs what the last reply offered; "what about 35%?", "why?" and "give them ₹100 off"
  * use what the last reply was about; setup never assumes an input.
+ * v3.1: setup is a form the merchant can step out of. Questions get real answers (nothing saved), then
+ * "Back to Q<n>"; what-ifs show the scenario; back/skip/pause work; Ray never repeats itself word for word.
  */
 import { route, FOLLOW_UPS, type QuickReply, type RayReply } from './demoRouter';
-import { question, parseAnswer, nextStep, stepsFor, type QCtx } from './setupFlow';
+import { question, parseAnswer, nextStep, stepsFor, classifySetupTurn, setupNav, whatIf, stepWhy, stepBenchmark, unclearHelp, qNum, resumeChip, valueText, KEY, DELEGATE, PAUSE_CHIP, SETUP_SHORT, STEP_WORD, type QCtx, type SetupNav, type WhatIf } from './setupFlow';
 import { T } from './templates';
 import { tools, type RayCtx } from './tools';
 import type { ChatMsg, LastTurn, SetupStep } from './chatStore';
 import type { InputSource, Settings } from '../state/store';
 import { AFFIRM, APPROVE_WORDS, GROUP_WORD, NEGATE, normalize, parseDays } from './parse';
 import { pendingInputs } from '../state/inputs';
-import { inr } from '../lib/format';
+import { inr, inrSigned } from '../lib/format';
 import { offerLabel } from '../lib/labels';
 import { inputValue } from '../state/inputs';
-import { INPUT_LABEL, inputKeysOf } from '../state/store';
+import { INPUT_LABEL, inputKeysOf, type InputKey } from '../state/store';
 
 export type RayMsg = Omit<ChatMsg, 'id'>;
-export type ConvState = { setup: SetupStep | null; last?: LastTurn | null };
+export type ConvState = {
+  setup: SetupStep | null; last?: LastTurn | null;
+  /** Setup paused at this step ("pause", or after three unclear answers); "Resume setup" returns to it. */
+  paused?: SetupStep | null;
+  /** Unclear answers in a row at the current setup step. */
+  unclear?: number;
+  /** Ray's previous message: a reply is never identical to it. */
+  prev?: string;
+};
 export type Turn = {
   /** Messages Ray posts (none when the turn goes to Live mode). */
   messages: RayMsg[];
@@ -31,8 +41,10 @@ export type Turn = {
   last: LastTurn | null;
   /** true = not a setup turn and not refused: Live mode may answer it instead. */
   liveEligible: boolean;
-  /** Turn-level intent when no routed reply exists (follow-up handling). */
-  intent?: 'clarify' | 'which_one' | 'approve_click' | 'ack';
+  /** Turn-level intent when no routed reply exists (follow-up handling, setup side turns). */
+  intent?: 'clarify' | 'which_one' | 'approve_click' | 'ack' | 'setup_nav' | 'setup_unclear' | 'setup_paused';
+  paused?: SetupStep | null;
+  unclear?: number;
 };
 
 const HELP_CHIPS: QuickReply[] = [
@@ -171,24 +183,194 @@ function finishSetup(ctx: RayCtx, settings: Settings, notes: string[]): RayMsg {
   return { role: 'ray', text: `${notes.length ? notes.join('\n') + '\n\n' : ''}${head}\nYour numbers: ${summary}${settings.growth ? ' (growth offers may run below the minimum return; that is the profit you chose to give up)' : ''}.`, cards: [{ kind: 'plan_live' }], quick: FOLLOW_UPS.plan, via: 'setup' };
 }
 
-export function converse(text: string, ctx: RayCtx, conv: ConvState): Turn {
-  if (conv.setup) {
-    const step = conv.setup;
-    if (/^(cancel|stop|exit|quit)\b/i.test(text.trim())) return { messages: [{ role: 'ray', text: 'Setup cancelled. Nothing changed.', via: 'setup' }], setup: null, last: null, liveEligible: false };
+/** Ask a setup question (with an optional lead line). */
+function ask(step: SetupStep, ctx: RayCtx, lead?: string, extra: Partial<Turn> = {}): Turn {
+  const qq = question(step, { ctx, settings: ctx.settings });
+  return { messages: [{ role: 'ray', text: `${lead ? `${lead}\n\n` : ''}${qq.text}`, quick: [...qq.quick, PAUSE_CHIP], via: 'setup' }], setup: step, last: null, liveEligible: false, paused: null, unclear: 0, ...extra };
+}
+
+/** "Back to Q<n>: …" with that step's chips and "Pause setup". */
+function backTo(step: SetupStep, ctx: RayCtx): { line: string; quick: QuickReply[] } {
+  return { line: `Back to ${qNum(step, ctx.settings)}: ${SETUP_SHORT[step]}`, quick: [...question(step, { ctx, settings: ctx.settings }).quick, PAUSE_CHIP] };
+}
+
+/** An offer to act at the end of a routed reply ("Want me to draft it?"): in setup the next question is the setup one. */
+const OFFER_Q = /\s*(Want (me )?to|Want them|Shall I|Would you like|Do you want|Should I|Want to)[^?.!]*\?\s*$/;
+
+/** "Why are you asking this?", "what does this mean?" */
+const WHY_ASK = /\bwhy\b.*\b(ask|asking|need|want)\b|\bwhat (does|is) (this|that|it|q\d)\b.*\b(mean|for)\b|\bexplain\b|\bwhat do you mean\b|\bwhy does (it|this) matter\b/;
+
+/** An answer for a side question the router has no rule for, using the step it was asked at. */
+function setupFallback(step: SetupStep, text: string, ctx: RayCtx): RayReply {
+  const t = normalize(text);
+  const q: QCtx = { ctx, settings: ctx.settings };
+  const own = (intent: string, body: string): RayReply => ({ intent, text: body, toolCalls: [] });
+  const via = (msg: string) => { const r = route(msg, ctx); return r.intent === 'help' ? null : r; };
+  if (step === 'offers' && /\b(options?|ideas?|suggest\w*|recommend\w*|others?|else|alternatives?|more offers)\b/.test(t)) { const r = via('What other offers should I try?'); if (r) return r; }
+  if (/\bwho gets what\b|\bhow do you (decide|choose|pick)\b|\bwhich groups?\b/.test(t)) { const r = via('How many groups get an offer?'); if (r) return r; }
+  if (WHY_ASK.test(t)) return own('setup_explain', stepWhy(step, q));
+  const bench = /\b(normal|typical|usual|average|others|other stores|similar|stores (like|my size)|benchmark|most stores)\b/.test(t) ? stepBenchmark(step, q) : null;
+  if (bench) return own('setup_benchmark', bench);
+  return own('setup_explain', `I don't have a tested answer to that one, so I won't guess. ${stepWhy(step, q)}`);
+}
+
+/** Value questions about another step ("what if I spend 2 lakh?" at the margin question), and the words they need. */
+const CROSS: [SetupStep, RegExp][] = [
+  // "is ₹50,000 too little?" is about the budget; "free shipping over ₹5,000" is not.
+  ['budget', /\b(budget|spend|spending)\b|^(?!.*\b(free shipping|off|over|above|cart|orders?|gift)\b).*\b(too (little|much|low|high|small|big)|enough)\b/],
+  ['margin', /\b(margin|keep)\b|\d\s?%/], ['offers', /./], ['floor', /\d\s?x\b/],
+];
+
+/** A question mid-setup: answered as if setup weren't running, nothing saved, then back to the same question. */
+function sideQuestion(step: SetupStep, text: string, ctx: RayCtx): Turn {
+  let r = route(text, ctx);
+  if (r.startSetup) return navTurn({ kind: 'restart' }, step, ctx);
+  if (!r.refused) {
+    const t = normalize(text);
     const q: QCtx = { ctx, settings: ctx.settings };
-    const a = parseAnswer(step, text, q);
-    if (!a.ok) { const qq = question(step, q); return { messages: [{ role: 'ray', text: a.hint, quick: qq.quick, via: 'setup' }], setup: step, last: null, liveEligible: false }; }
-    const settings = { ...ctx.settings, ...a.patch };
-    const patches = [{ patch: a.patch, source: a.source }];
-    const next = a.rest ? null : a.again ? step : nextStep(step, settings);
-    if (next && stepsFor(settings).includes(next)) {
-      const qq = question(next, { ctx: { ...ctx, settings }, settings });
-      return { messages: [{ role: 'ray', text: (a.note ? a.note + '\n\n' : '') + qq.text, quick: qq.quick, via: 'setup' }], setup: next, patches, last: null, liveEligible: false };
+    for (const [other, need] of CROSS) {
+      if (other === step || !need.test(t)) continue;
+      const w = whatIf(other, t, q);
+      if (w) return sideWhatIf(step, ctx, w, other);
     }
-    return { messages: [finishSetup(ctx, settings, a.note ? [a.note] : [])], setup: null, patches, last: { intent: 'plan' }, liveEligible: false };
   }
+  if (r.intent === 'help') r = setupFallback(step, text, ctx);
+  const note = typicalNote(r, ctx);
+  const b = backTo(step, ctx);
+  const body = r.card?.kind === 'draft' ? r.text : r.text.replace(OFFER_Q, '');
+  return {
+    messages: [{ role: 'ray', text: `${body.trimEnd()}${note ? `\n${note.text}` : ''}\n\n${b.line}`, cards: r.card ? [r.card] : undefined, quick: b.quick, refused: r.refused, via: 'setup' }],
+    setup: step, reply: r, last: null, liveEligible: false, paused: null, unclear: 0,
+  };
+}
+
+/** A value asked about, not given ("is ₹50,000 too little?"): show the scenario; "Use <value>" makes it the answer. */
+function sideWhatIf(step: SetupStep, ctx: RayCtx, w: WhatIf, target: SetupStep = step): Turn {
+  const q: QCtx = { ctx, settings: ctx.settings };
+  const order = stepsFor(ctx.settings);
+  // The value is for this question: "Use <value>" answers it. For another question: nothing to tap here.
+  const use: QuickReply | null = target === step ? w.use : order.indexOf(target) < order.indexOf(step) ? { label: `Change my ${STEP_WORD[target]}`, message: `change my ${STEP_WORD[target]}` } : null;
+  const save = target === step ? `Nothing is saved until you tap **${w.use.label}** or type it.` : use ? `Nothing is saved. To use it, change ${qNum(target, ctx.settings)} (your ${STEP_WORD[target]}).` : `Nothing is saved; I ask about your ${STEP_WORD[target]} at ${qNum(target, ctx.settings)}.`;
+  const sim = tools.simulate_plan(ctx, w.args);
+  const now = tools.simulate_plan(ctx, {});
+  const on = sim.rows.filter((x) => x.offer !== 'none').length;
+  const d = sim.profit - now.profit;
+  const unused = w.args.budget !== undefined && sim.spend < w.args.budget * 0.97 ? ` and uses only ${inr(sim.spend)} of it` : '';
+  const bench = target === 'budget' || target === 'margin' ? stepBenchmark(target, q) : null;
+  const body = `With ${w.what}, the plan makes **${inrSigned(sim.profit)} a month**${unused} (${on} of ${sim.rows.length} groups get an offer). With your inputs so far it makes ${inrSigned(now.profit)}, so that's ${d === 0 ? 'no difference' : `${inr(Math.abs(d))} ${d > 0 ? 'more' : 'less'} a month`}.${bench ? ` ${bench}` : ''} ${save}`;
+  const r: RayReply = { intent: 'setup_what_if', text: body, toolCalls: [{ name: 'simulate_plan', args: w.args, result: sim }], card: { kind: 'sim', title: `Scenario: ${sim.scenario} (not applied)`, sim } };
+  const note = typicalNote(r, ctx);
+  const b = backTo(step, ctx);
+  return {
+    messages: [{ role: 'ray', text: `${body}${note ? `\n${note.text}` : ''}\n\n${b.line}`, cards: [r.card!], quick: use ? [use, ...b.quick.filter((c) => c.message !== use.message)] : b.quick, via: 'setup' }],
+    setup: step, reply: r, last: null, liveEligible: false, paused: null, unclear: 0,
+  };
+}
+
+/** Setup paused: answers so far are kept (they are inputs, not approvals). */
+function pauseTurn(step: SetupStep, ctx: RayCtx, lead: string): Turn {
+  return {
+    messages: [{ role: 'ray', text: `${lead} ${ctx.approved ? 'Your live plan doesn\'t change.' : 'Nothing goes live until you approve a plan.'} Ask me anything.`, quick: [resumeChip(step, ctx.settings), ...chipsFor(HELP_CHIPS, ctx).filter((c) => c.message !== 'Set up Smart Offers').slice(0, 3)], via: 'setup' }],
+    setup: null, last: null, liveEligible: false, paused: step, unclear: 0, intent: 'setup_paused',
+  };
+}
+
+function navTurn(nav: SetupNav, step: SetupStep, ctx: RayCtx): Turn {
+  const s = ctx.settings;
+  const order = stepsFor(s);
+  const nav1 = (t: Turn): Turn => ({ ...t, intent: 'setup_nav' });
+  switch (nav.kind) {
+    case 'back': {
+      const i = order.indexOf(step);
+      return nav1(i > 0 ? ask(order[i - 1], ctx, 'Going back one question.') : ask(step, ctx, 'This is the first question.'));
+    }
+    case 'jump': return nav1(ask(order.includes(nav.step) ? nav.step : 'goal', ctx, 'Sure, let\'s change that.'));
+    case 'restart': return nav1(ask(order[0], ctx, ctx.approved ? 'Starting over from Q1. Each question shows your live value; tap Keep to keep it.' : 'Starting over from Q1. Your earlier answers stay as defaults: tap Keep to keep one.'));
+    case 'repeat': return nav1(ask(step, ctx, 'Here\'s the question again.'));
+    case 'pause': return pauseTurn(step, ctx, `Setup paused at ${qNum(step, s)} (${SETUP_SHORT[step]}). Your answers so far are kept as inputs.`);
+    case 'status': {
+      const keys = [...new Set(order.map((x) => KEY[x]))];
+      const src = (k: InputKey) => ctx.confirmed?.[k] === 'merchant' ? 'yours' : ctx.confirmed?.[k] === 'typical' ? 'typical, accepted' : ctx.approved ? 'live plan' : 'not answered yet; typical shown';
+      const lines = keys.map((k) => `- ${INPUT_LABEL[k]}: ${inputValue(k, s, 1000 / s.keepPer1000)} (${src(k)})`);
+      const qq = question(step, { ctx, settings: s });
+      return nav1({ messages: [{ role: 'ray', text: `Your answers so far:\n${lines.join('\n')}\nNow: ${qNum(step, s)} · ${SETUP_SHORT[step]}`, quick: [...qq.quick, PAUSE_CHIP], via: 'setup' }], setup: step, last: null, liveEligible: false, paused: null, unclear: 0 });
+    }
+    case 'skip': {
+      if (step === 'growth') return answerTurn(step, 'none', ctx, 'Skipped: no profit given up for growth, so the plan stays most profit.');
+      const a = parseAnswer(step, 'typical', { ctx, settings: s });
+      const v = a.ok ? valueText(step, { ...s, ...a.patch }) : null;
+      return answerTurn(step, 'typical', ctx, `Skipped: using the typical value for stores your size${v ? ` (**${v}**)` : ''}, marked typical, not yours.`);
+    }
+  }
+}
+
+/** Unclear answers escalate: what it means → other words, an example and an easy way out → pause. */
+function unclearTurn(step: SetupStep, text: string, ctx: RayCtx, n: number): Turn {
+  const q: QCtx = { ctx, settings: ctx.settings };
+  if (n >= 3) return pauseTurn(step, ctx, `Let's pause setup so you're not stuck. Your answers so far are kept, and I'll pick up at ${qNum(step, ctx.settings)} when you're ready.`);
+  const a = parseAnswer(step, text, q);
+  const h = unclearHelp(step, q, n);
+  return { messages: [{ role: 'ray', text: n === 1 && !a.ok ? `${a.hint} ${h.text}` : h.text, quick: n === 1 ? [...h.quick, PAUSE_CHIP] : h.quick, via: 'setup' }], setup: step, last: null, liveEligible: false, paused: null, unclear: n, intent: 'setup_unclear' };
+}
+
+/** An answer: saved as the merchant's input (or as typical when they hand it to Ray), then the next question. */
+function answerTurn(step: SetupStep, text: string, ctx: RayCtx, lead?: string, unclear = 0): Turn {
+  const q: QCtx = { ctx, settings: ctx.settings };
+  const a = parseAnswer(step, text, q);
+  if (!a.ok) return unclearTurn(step, text, ctx, unclear + 1);
+  // "Keep it" keeps an earlier answer as it was (typical stays typical).
+  const kept = /^(keep( it| the same| as is)?|same|no change|unchanged)$/i.test(text.trim()) && !ctx.approved ? ctx.confirmed?.[KEY[step]] : undefined;
+  const settings = { ...ctx.settings, ...a.patch };
+  const patches = [{ patch: a.patch, source: kept ?? a.source }];
+  const notes = [lead, a.note].filter((x): x is string => Boolean(x));
+  const next = a.rest ? null : a.again ? step : nextStep(step, settings);
+  if (next && stepsFor(settings).includes(next)) {
+    const qq = question(next, { ctx: { ...ctx, settings, confirmed: { ...ctx.confirmed, ...Object.fromEntries(inputKeysOf(a.patch).map((k) => [k, kept ?? a.source])) } }, settings });
+    return { messages: [{ role: 'ray', text: (notes.length ? notes.join(' ') + '\n\n' : '') + qq.text, quick: qq.quick, via: 'setup' }], setup: next, patches, last: null, liveEligible: false, paused: null, unclear: 0 };
+  }
+  return { messages: [finishSetup(ctx, settings, notes)], setup: null, patches, last: { intent: 'plan' }, liveEligible: false, paused: null, unclear: 0 };
+}
+
+function setupTurn(text: string, ctx: RayCtx, conv: ConvState): Turn {
+  const step = conv.setup!;
+  const q: QCtx = { ctx, settings: ctx.settings };
+  const kind = classifySetupTurn(step, text, q);
+  if (kind === 'nav') return navTurn(setupNav(text)!, step, ctx);
+  if (kind === 'question') return sideQuestion(step, text, ctx);
+  if (kind === 'what_if') { const w = whatIf(step, normalize(text), q); return w ? sideWhatIf(step, ctx, w) : sideQuestion(step, text, ctx); }
+  if (kind === 'unclear') return unclearTurn(step, text, ctx, (conv.unclear ?? 0) + 1);
+  const t = text.toLowerCase().trim();
+  if (DELEGATE.test(t)) {
+    if (step === 'growth') return answerTurn(step, 'none', ctx, 'I won\'t give up profit on your behalf, so the plan stays most profit. You can pick a growth step on the Trade-offs card any time.');
+    return answerTurn(step, step === 'margin' && /know|sure|idea/.test(t) ? text : 'typical', ctx, step === 'margin' && /know|sure|idea/.test(t) ? undefined : 'I\'ll use the typical value for stores your size here, marked typical, not yours.');
+  }
+  return answerTurn(step, text, ctx, undefined, conv.unclear ?? 0);
+}
+
+const RESUME = /^(resume|continue|finish|back to|go back to|carry on with)( the| my)? setup\b|^resume setup at q\d+$/;
+
+/** Ray's reply to one merchant message. Never identical to Ray's previous message. */
+export function converse(text: string, ctx: RayCtx, conv: ConvState): Turn {
+  const turn = converseOnce(text, ctx, conv);
+  const out: Turn = { ...turn, paused: turn.paused !== undefined ? turn.paused : turn.setup ? null : conv.paused ?? null, unclear: turn.unclear ?? 0 };
+  const first = out.messages[0];
+  if (conv.prev !== undefined && first && first.text.trim() === conv.prev.trim()) out.messages = [{ ...first, text: `Same answer as a moment ago, since nothing has changed:\n\n${first.text}` }, ...out.messages.slice(1)];
+  // While setup is paused, every reply keeps a way back (only the latest message shows chips).
+  const lastMsg = out.messages[out.messages.length - 1];
+  if (out.paused && !out.setup && lastMsg && !(lastMsg.quick ?? []).some((c) => c.message === 'Resume setup')) {
+    out.messages = [...out.messages.slice(0, -1), { ...lastMsg, quick: [resumeChip(out.paused, ctx.settings), ...(lastMsg.quick ?? [])].slice(0, 5) }];
+  }
+  return out;
+}
+
+function converseOnce(text: string, ctx: RayCtx, conv: ConvState): Turn {
+  if (conv.setup) return setupTurn(text, ctx, conv);
 
   const t = normalize(text);
+  if (RESUME.test(t)) {
+    if (conv.paused && stepsFor(ctx.settings).includes(conv.paused)) return ask(conv.paused, ctx, 'Back to setup.');
+    return converseOnce('Set up Smart Offers', ctx, { ...conv, paused: null });
+  }
   const last = conv.last;
   if (last?.draft && (AFFIRM.test(t) || APPROVE_WORDS.test(t))) return { messages: [{ role: 'ray', text: 'Tap **Approve** on the draft card above to make it live. I can only draft: your click is what changes anything.', via: 'demo' }], setup: null, last, liveEligible: false, intent: 'approve_click' };
   if (AFFIRM.test(t)) {

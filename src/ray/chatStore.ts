@@ -24,6 +24,10 @@ type ChatState = {
   busy: boolean;
   pending: string | null; // message queued from another screen
   setup: SetupStep | null;
+  /** Setup paused at this step (resume with "Resume setup"). */
+  setupPaused: SetupStep | null;
+  /** Unclear answers in a row at the current setup step. */
+  setupUnclear: number;
   last: LastTurn | null;
   setLast: (l: LastTurn | null) => void;
   push: (m: Omit<ChatMsg, 'id'>) => void;
@@ -31,19 +35,19 @@ type ChatState = {
   setBusy: (b: boolean) => void;
   setLiveHistory: (h: LiveMessage[]) => void;
   queue: (text: string | null) => void;
-  setSetup: (s: SetupStep | null) => void;
+  setSetup: (s: SetupStep | null, paused?: SetupStep | null, unclear?: number) => void;
   clear: () => void;
 };
 
 let nextId = 1;
 export const useChat = create<ChatState>((set) => ({
-  messages: [], liveHistory: [], health: { state: 'checking' }, busy: false, pending: null, setup: null, last: null,
+  messages: [], liveHistory: [], health: { state: 'checking' }, busy: false, pending: null, setup: null, setupPaused: null, setupUnclear: 0, last: null,
   setLast: (last) => set({ last }),
   push: (m) => set((s) => ({ messages: [...s.messages, { ...m, id: nextId++ }] })),
   setHealth: (health) => set({ health }),
   setBusy: (busy) => set({ busy }),
   setLiveHistory: (liveHistory) => set({ liveHistory }),
   queue: (pending) => set({ pending }),
-  setSetup: (setup) => set({ setup }),
-  clear: () => set({ messages: [], liveHistory: [], pending: null, setup: null, last: null }),
+  setSetup: (setup, setupPaused = null, setupUnclear = 0) => set({ setup, setupPaused, setupUnclear }),
+  clear: () => set({ messages: [], liveHistory: [], pending: null, setup: null, setupPaused: null, setupUnclear: 0, last: null }),
 }));
